@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>謝礼金 取りまとめ | KESEN LARUS BASKETBALL CLUB</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="app-header">
+  <h1>謝礼金 取りまとめ</h1>
+  <p class="subtitle">帯同審判・コミッショナー謝礼金（KESEN LARUS BASKETBALL CLUB 交通費等及び謝礼金支給規程 第5条・第6条）</p>
+</header>
+
+<nav class="tabs">
+  <button class="tab-btn active" data-tab="entry">入力</button>
+  <button class="tab-btn" data-tab="list">一覧</button>
+</nav>
+
+<main>
+  <!-- ============ 入力タブ ============ -->
+  <section id="panel-entry" class="tab-panel active">
+    <form id="entry-form">
+      <div class="form-grid form-grid-compact">
+        <label class="field-group">
+          日付
+          <input type="date" id="f-date" required>
+        </label>
+
+        <label class="field-group">
+          区分
+          <select id="f-role">
+            <option value="referee">帯同審判</option>
+            <option value="commissioner">コミッショナー</option>
+          </select>
+        </label>
+
+        <label class="field-group" id="group-gametype">
+          試合種別
+          <select id="f-gametype">
+            <option value="practice_game">練習試合</option>
+            <option value="official_game">公式戦（2,500円/試合）</option>
+          </select>
+        </label>
+
+        <label class="field-group" id="group-location">
+          活動場所
+          <select id="f-location">
+            <option value="in">気仙管内</option>
+            <option value="out">気仙管外</option>
+          </select>
+        </label>
+
+        <label class="field-group" id="group-duration">
+          拘束時間
+          <select id="f-duration">
+            <option value="half">半日（4h以内・1試合）</option>
+            <option value="full">1日（4h超）</option>
+          </select>
+        </label>
+
+        <div class="field-group unit-amount-box">
+          支給額
+          <div class="unit-amount" id="f-unit-amount">¥2,000</div>
+        </div>
+      </div>
+
+      <div class="form-grid form-grid-compact">
+        <label class="field-group">
+          対象者
+          <select id="f-name-select"></select>
+        </label>
+        <label class="field-group" id="group-name-other">
+          お名前（その他）
+          <input type="text" id="f-name-other" placeholder="氏名を入力">
+        </label>
+      </div>
+
+      <label class="field-group note-field">
+        備考（任意）
+        <input type="text" id="f-note" placeholder="必要な場合のみ">
+      </label>
+
+      <button type="submit" class="btn-primary">登録する</button>
+    </form>
+
+    <details class="contact-settings">
+      <summary>よく依頼する対象者の登録・削除</summary>
+      <div class="roster-body">
+        <div class="roster-add-row">
+          <input type="text" id="roster-new-name" placeholder="氏名を入力して追加">
+          <button type="button" id="roster-add-btn" class="btn-secondary">追加</button>
+        </div>
+        <ul id="roster-list" class="roster-list"></ul>
+      </div>
+    </details>
+  </section>
+
+  <!-- ============ 一覧タブ ============ -->
+  <section id="panel-list" class="tab-panel">
+    <div class="filter-bar">
+      <label>対象月
+        <select id="list-month-filter"><option value="">すべての月</option></select>
+      </label>
+      <label>氏名で絞り込み
+        <input type="text" id="list-name-filter" placeholder="氏名">
+      </label>
+      <div class="filter-stats">
+        <span id="list-count">0 件</span>
+        <span>合計 <strong id="list-total">¥0</strong></span>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="sheet-table">
+        <thead>
+          <tr>
+            <th>日付</th><th>氏名</th><th>区分</th><th>内容</th><th>支給額</th><th>備考</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="list-tbody"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<div id="toast" class="toast"></div>
+
+<script src="firebase-bundle.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

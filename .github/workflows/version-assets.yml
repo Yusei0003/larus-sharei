@@ -1,0 +1,66 @@
+name: Version static assets
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Skip if this run's own commit
+        id: skip_check
+        run: |
+          if git log -1 --pretty=%s | grep -q '^chore: bump asset cache-busting version$'; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update cache-busting version in index.html
+        if: steps.skip_check.outputs.skip == 'false'
+        run: |
+          VERSION=$(date -u +%Y%m%d%H%M%S)
+          python3 - "$VERSION" << 'PYEOF'
+          import re, sys
+          version = sys.argv[1]
+          path = 'index.html'
+          with open(path, encoding='utf-8') as f:
+              html = f.read()
+
+          def repl(m):
+              tag, attr, url = m.group(1), m.group(2), m.group(3)
+              base = url.split('?')[0]
+              if base.startswith('http://') or base.startswith('https://'):
+                  return m.group(0)
+              return f'{tag} {attr}="{base}?v={version}"'
+
+          html2 = re.sub(r'(<script)\s+(src)="([^"]+)"', repl, html)
+          html2 = re.sub(r'(<link[^>]*?)\s+(href)="([^"]+)"', repl, html2)
+
+          if html2 != html:
+              with open(path, 'w', encoding='utf-8') as f:
+                  f.write(html2)
+              print('updated to', version)
+          else:
+              print('no change')
+          PYEOF
+
+      - name: Commit and push if changed
+        if: steps.skip_check.outputs.skip == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet; then
+            echo "No changes to commit"
+          else
+            git add index.html
+            git commit -m "chore: bump asset cache-busting version"
+            git push
+          fi
