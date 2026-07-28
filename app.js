@@ -19,7 +19,11 @@ const RULES = {
   },
   commissioner: {
     label: 'コミッショナー',
-    table: { in: 1000, out: 2000 },
+    /* 気仙管外は謝礼(試合数分)＋交通費(1日1回のみ)の合計。気仙管内は交通費なし */
+    location: {
+      in: { honorarium: 1000, transport: 0 },
+      out: { honorarium: 1000, transport: 1000 },
+    },
   },
 };
 
@@ -33,17 +37,33 @@ function gameCountApplies(role, gametype) {
   return role === 'commissioner' || (role === 'referee' && gametype === 'official_game');
 }
 
-function calcUnitAmount(role, { gametype, location, duration }) {
+function calcAmount(role, { gametype, location, duration, gamecount }) {
   if (role === 'referee') {
     const gt = RULES.referee.gametype[gametype];
     if (!gt) return 0;
-    if (gt.flat !== undefined) return gt.flat;
+    if (gt.flat !== undefined) return gt.flat * (gamecount || 1);
     return gt.table[location]?.[duration] ?? 0;
   }
   if (role === 'commissioner') {
-    return RULES.commissioner.table[location] ?? 0;
+    const conf = RULES.commissioner.location[location];
+    if (!conf) return 0;
+    return conf.honorarium * (gamecount || 1) + conf.transport;
   }
   return 0;
+}
+
+function amountBreakdownText(role, { gametype, location, gamecount }) {
+  if (role === 'referee' && gametype === 'official_game') {
+    return `${yen(RULES.referee.gametype.official_game.flat)} × ${gamecount}試合`;
+  }
+  if (role === 'commissioner') {
+    const conf = RULES.commissioner.location[location];
+    if (!conf) return '';
+    const parts = [`謝礼 ${yen(conf.honorarium)} × ${gamecount}試合`];
+    if (conf.transport > 0) parts.push(`交通費 ${yen(conf.transport)}`);
+    return parts.join(' + ');
+  }
+  return '';
 }
 
 function roleLabel(role) {
@@ -191,8 +211,7 @@ function initForm() {
       const duration = role === 'referee' && gametype === 'practice_game' ? document.getElementById('f-duration').value : undefined;
       const applyCount = gameCountApplies(role, gametype);
       const gamecount = applyCount ? Number(document.getElementById('f-gamecount').value) : undefined;
-      const unit = calcUnitAmount(role, { gametype, location, duration });
-      const amount = unit * (applyCount ? gamecount : 1);
+      const amount = calcAmount(role, { gametype, location, duration, gamecount });
       record = { date, role, gametype, location, duration, gamecount, amount, name, note };
     }
 
@@ -240,13 +259,12 @@ function updateUnitAmount() {
   const gametype = document.getElementById('f-gametype').value;
   const location = document.getElementById('f-location').value;
   const duration = document.getElementById('f-duration').value;
-  const unit = calcUnitAmount(role, { gametype, location, duration });
   const applyCount = gameCountApplies(role, gametype);
   const gamecount = applyCount ? Number(document.getElementById('f-gamecount').value) : 1;
-  const total = unit * gamecount;
+  const total = calcAmount(role, { gametype, location, duration, gamecount });
 
   document.getElementById('f-unit-amount').textContent = yen(total);
-  document.getElementById('f-unit-amount-detail').textContent = applyCount ? `${yen(unit)} × ${gamecount}試合` : '';
+  document.getElementById('f-unit-amount-detail').textContent = applyCount ? amountBreakdownText(role, { gametype, location, gamecount }) : '';
 }
 
 function updateNameFieldVisibility() {
