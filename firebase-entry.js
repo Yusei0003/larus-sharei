@@ -37,6 +37,7 @@ setPersistence(auth, browserLocalPersistence).catch(() => {});
 
 const recordsCol = collection(db, 'sharei_records');
 const rosterDocRef = doc(db, 'sharei_meta', 'roster');
+const contactsDocRef = doc(db, 'sharei_meta', 'contacts');
 
 function fsDocToRecord(d) {
   return { id: d.id, ...d.data() };
@@ -84,6 +85,19 @@ window.FirebaseData = {
   },
   async saveRoster(names) {
     await setDoc(rosterDocRef, { names });
+  },
+  subscribeContacts(cb) {
+    return onSnapshot(
+      contactsDocRef,
+      (snap) => {
+        const data = snap.exists() ? snap.data() : {};
+        cb({ addresses: data.addresses || {}, phones: data.phones || {} });
+      },
+      (err) => console.error('contacts subscription error', err)
+    );
+  },
+  async saveContacts(contacts) {
+    await setDoc(contactsDocRef, contacts);
   },
 };
 

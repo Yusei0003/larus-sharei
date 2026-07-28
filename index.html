@@ -108,6 +108,10 @@
           お名前（その他）
           <input type="text" id="f-name-other" placeholder="氏名を入力">
         </label>
+        <label class="field-group">
+          大会開催地（任意）
+          <input type="text" id="f-venue" placeholder="例）高田第一中学校">
+        </label>
       </div>
 
       <label class="field-group note-field">
@@ -127,6 +131,12 @@
         </div>
         <ul id="roster-list" class="roster-list"></ul>
       </div>
+    </details>
+
+    <details class="contact-settings">
+      <summary>精算書用の連絡先・住所を設定</summary>
+      <p class="import-hint">よく依頼する対象者について、精算書に載せる連絡先・住所をあらかじめ登録できます（この情報もFirestoreに保存され、全端末で共有されます）。</p>
+      <div class="contact-settings-body" id="contact-settings-body"></div>
     </details>
   </section>
 
@@ -148,7 +158,7 @@
       <table class="sheet-table">
         <thead>
           <tr>
-            <th>日付</th><th>氏名</th><th>区分</th><th>内容</th><th>支給額</th><th>備考</th><th></th>
+            <th>日付</th><th>氏名</th><th>区分</th><th>内容</th><th>支給額</th><th>備考</th><th></th><th></th>
           </tr>
         </thead>
         <tbody id="list-tbody"></tbody>
@@ -158,6 +168,7 @@
 </main>
 
 <div id="toast" class="toast"></div>
+<div id="receipt-print-area" class="receipt-print-area"></div>
 
 <script src="firebase-bundle.js?v=20260728075954"></script>
 <script src="app.js?v=20260728075954"></script>

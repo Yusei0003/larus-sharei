@@ -97,6 +97,7 @@ function describeEntry(r) {
  * ============================================================ */
 let records = [];
 let rosterNames = [];
+let contactsCache = { addresses: {}, phones: {} };
 
 function yen(n) {
   return '¥' + Number(n || 0).toLocaleString('ja-JP');
@@ -190,6 +191,7 @@ function initForm() {
     }
 
     const note = document.getElementById('f-note').value;
+    const venue = document.getElementById('f-venue').value.trim();
     let record;
 
     if (role === 'other') {
@@ -203,7 +205,7 @@ function initForm() {
         alert('支給額を正しく入力してください');
         return;
       }
-      record = { date, role, otherContent, amount, name, note };
+      record = { date, role, otherContent, amount, name, note, venue };
     } else {
       const gametype = role === 'referee' ? document.getElementById('f-gametype').value : undefined;
       const showLocation = role === 'commissioner' || (role === 'referee' && gametype === 'practice_game');
@@ -212,7 +214,7 @@ function initForm() {
       const applyCount = gameCountApplies(role, gametype);
       const gamecount = applyCount ? Number(document.getElementById('f-gamecount').value) : undefined;
       const amount = calcAmount(role, { gametype, location, duration, gamecount });
-      record = { date, role, gametype, location, duration, gamecount, amount, name, note };
+      record = { date, role, gametype, location, duration, gamecount, amount, name, note, venue };
     }
 
     const submitBtn = form.querySelector('.btn-primary');
@@ -369,6 +371,7 @@ function renderList() {
       <td>${escapeHtml(describeEntry(r))}</td>
       <td class="num"><input type="number" class="amount-edit" value="${r.amount}" data-id="${r.id}" step="1"></td>
       <td>${escapeHtml(r.note || '')}</td>
+      <td><button class="btn-secondary receipt-btn" data-receipt="${r.id}">精算書</button></td>
       <td><button class="btn-danger" data-del="${r.id}">削除</button></td>
     `;
     tbody.appendChild(tr);
@@ -395,6 +398,12 @@ function renderList() {
       }
     });
   });
+  tbody.querySelectorAll('[data-receipt]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const record = filtered.find((r) => r.id === btn.dataset.receipt);
+      if (record) handleReceiptClick(record);
+    });
+  });
 
   populateMonthOptions(monthFilter);
 }
@@ -417,14 +426,168 @@ function initList() {
 }
 
 /* ============================================================
- * 認証（共有の合言葉でFirebase Authenticationにログイン。交通費アプリと同じアカウント）
+ * 精算書用の連絡先・住所（よく依頼する対象者ごとに設定。Firestoreで共有）
  * ============================================================ */
-function rerenderAll() {
-  renderList();
-  renderNameSelect();
-  renderRosterList();
+function saveContacts(contacts) {
+  window.FirebaseData.saveContacts(contacts).catch((err) => {
+    console.error('saveContacts failed', err);
+    alert('連絡先の保存に失敗しました: ' + err.message);
+  });
 }
 
+function renderContactSettingsBody() {
+  const body = document.getElementById('contact-settings-body');
+  if (rosterNames.length === 0) {
+    body.innerHTML = '<p class="import-hint">「よく依頼する対象者の登録・削除」で対象者を登録すると、ここで連絡先・住所を設定できるようになります。</p>';
+    return;
+  }
+  body.innerHTML = rosterNames
+    .map(
+      (name, i) => `
+    <fieldset class="contact-person">
+      <legend>${escapeHtml(name)}</legend>
+      <label class="field-group">
+        住所
+        <input type="text" id="c-address-${i}" data-name="${escapeHtml(name)}" data-field="address" placeholder="例）陸前高田市高田町字中和野14-1">
+      </label>
+      <label class="field-group">
+        電話番号
+        <input type="text" id="c-phone-${i}" data-name="${escapeHtml(name)}" data-field="phone" placeholder="080-0000-0000">
+      </label>
+    </fieldset>`
+    )
+    .join('');
+
+  body.querySelectorAll('input').forEach((input) => {
+    const name = input.dataset.name;
+    const field = input.dataset.field;
+    input.addEventListener('input', () => {
+      const target = field === 'address' ? contactsCache.addresses : contactsCache.phones;
+      target[name] = input.value;
+      saveContacts(contactsCache);
+    });
+  });
+
+  refreshContactInputs();
+}
+
+function refreshContactInputs() {
+  document.querySelectorAll('#contact-settings-body input').forEach((input) => {
+    if (document.activeElement === input) return; // 入力中の欄は上書きしない
+    const name = input.dataset.name;
+    const field = input.dataset.field;
+    const store = field === 'address' ? contactsCache.addresses : contactsCache.phones;
+    input.value = store[name] || '';
+  });
+}
+
+/* ============================================================
+ * 精算書（謝礼金精算書）PDF出力
+ * ============================================================ */
+const RECEIPT_TITLES = { referee: '審判謝礼精算書', commissioner: 'コミッショナー謝礼精算書', other: '謝礼金精算書' };
+
+function numFmt(n) {
+  return Number(n || 0).toLocaleString('ja-JP');
+}
+
+function formatDateDot(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return `${y}.${m}.${d}`;
+}
+
+function eventLabel(r) {
+  const d = formatDateDot(r.date);
+  let typeText = '';
+  if (r.role === 'referee') typeText = RULES.referee.gametype[r.gametype]?.label ?? '';
+  else if (r.role === 'commissioner') typeText = 'コミッショナー';
+  else if (r.role === 'other') typeText = r.otherContent || '';
+  return typeText ? `${d}　${typeText}` : d;
+}
+
+function buildReceiptRows(r) {
+  if (r.role === 'referee') {
+    if (r.gametype === 'practice_game') {
+      return [{ label: DURATION_LABEL[r.duration] || '', amount: r.amount }];
+    }
+    if (r.gametype === 'official_game') {
+      const unit = RULES.referee.gametype.official_game.flat;
+      return [{ label: `公式戦（${yen(unit)} × ${r.gamecount || 1}試合）`, amount: r.amount }];
+    }
+  }
+  if (r.role === 'commissioner') {
+    const conf = RULES.commissioner.location[r.location];
+    const gamecount = r.gamecount || 1;
+    const honorarium = (conf?.honorarium ?? 0) * gamecount;
+    const rows = [{ label: `謝礼（${yen(conf?.honorarium ?? 0)} × ${gamecount}試合）`, amount: honorarium }];
+    if (conf && conf.transport > 0) rows.push({ label: '交通費', amount: conf.transport });
+    return rows;
+  }
+  if (r.role === 'other') {
+    return [{ label: r.otherContent || '内容', amount: r.amount }];
+  }
+  return [{ label: '', amount: r.amount }];
+}
+
+function renderReceiptPrintArea(recordsToPrint) {
+  const area = document.getElementById('receipt-print-area');
+  area.innerHTML = recordsToPrint
+    .map((r) => {
+      const rows = buildReceiptRows(r);
+      const total = rows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
+      const phone = contactsCache.phones[r.name] || '';
+      const address = contactsCache.addresses[r.name] || '';
+      const rowsHtml = rows
+        .map((row) => `<tr><td class="rc-item-label">${escapeHtml(row.label)}</td><td class="rc-num">${numFmt(row.amount)} 円</td></tr>`)
+        .join('');
+
+      return `
+      <div class="receipt-page">
+        <img class="receipt-logo-img" src="logo.png" alt="KESEN LARUS BASKETBALL CLUB">
+        <div class="receipt-logo-divider"></div>
+        <div class="receipt-title-bar"><span>${escapeHtml(RECEIPT_TITLES[r.role] ?? '謝礼金精算書')}</span></div>
+        <table class="receipt-info-table">
+          <tr>
+            <th>大会名</th>
+            <td>${escapeHtml(eventLabel(r))}</td>
+            <th>大会開催地</th>
+            <td>${escapeHtml(r.venue || '')}</td>
+          </tr>
+          <tr>
+            <th>名前</th>
+            <td class="receipt-name-cell">${escapeHtml(r.name)}<span class="receipt-seal">印</span></td>
+            <th>連絡先</th>
+            <td>${escapeHtml(phone)}</td>
+          </tr>
+          <tr>
+            <th>住所</th>
+            <td colspan="3">${escapeHtml(address)}</td>
+          </tr>
+        </table>
+        <table class="receipt-amount-table">
+          <tr><th>金額</th><td class="receipt-amount-value">${numFmt(total)}</td><td class="receipt-amount-unit">円</td></tr>
+        </table>
+        <table class="receipt-detail-table">
+          ${rowsHtml}
+          <tr class="rc-total-row"><td class="rc-total-label">合計</td><td class="rc-num">${numFmt(total)} 円</td></tr>
+        </table>
+        ${r.note ? `<p class="receipt-note">備考：${escapeHtml(r.note)}</p>` : ''}
+      </div>`;
+    })
+    .join('');
+}
+
+function handleReceiptClick(record) {
+  renderReceiptPrintArea([record]);
+  window.print();
+}
+
+function initContactSettings() {
+  renderContactSettingsBody();
+}
+
+/* ============================================================
+ * 認証（共有の合言葉でFirebase Authenticationにログイン。交通費アプリと同じアカウント）
+ * ============================================================ */
 function initAuth() {
   const loginForm = document.getElementById('login-form');
   const loginPin = document.getElementById('login-pin');
@@ -434,6 +597,7 @@ function initAuth() {
 
   let unsubscribeRecords = null;
   let unsubscribeRoster = null;
+  let unsubscribeContacts = null;
   let autoLoginAttempted = false;
 
   const urlKey = new URLSearchParams(location.search).get('key');
@@ -478,6 +642,13 @@ function initAuth() {
           rosterNames = names;
           renderNameSelect();
           renderRosterList();
+          renderContactSettingsBody();
+        });
+      }
+      if (!unsubscribeContacts) {
+        unsubscribeContacts = window.FirebaseData.subscribeContacts((c) => {
+          contactsCache = c;
+          refreshContactInputs();
         });
       }
     } else {
@@ -490,8 +661,13 @@ function initAuth() {
         unsubscribeRoster();
         unsubscribeRoster = null;
       }
+      if (unsubscribeContacts) {
+        unsubscribeContacts();
+        unsubscribeContacts = null;
+      }
       records = [];
       rosterNames = [];
+      contactsCache = { addresses: {}, phones: {} };
     }
   });
 
@@ -518,6 +694,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initTabs();
   initForm();
   initRoster();
+  initContactSettings();
   initList();
   initAuth();
 });
