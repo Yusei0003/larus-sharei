@@ -31,9 +31,63 @@ body {
   color: #fff;
   padding: 22px 24px;
   box-shadow: var(--shadow-md);
+  position: relative;
+  z-index: 1;
 }
 .app-header h1 { margin: 0 0 4px; font-size: 1.45rem; letter-spacing: 0.02em; }
 .app-header .subtitle { margin: 0; font-size: 0.85rem; opacity: 0.9; }
+.logout-btn {
+  position: absolute;
+  top: 22px;
+  right: 24px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: #fff;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.logout-btn:hover { background: rgba(255, 255, 255, 0.25); }
+
+/* ログイン中はアプリ本体を隠す */
+body.auth-locked .app-header,
+body.auth-locked .tabs,
+body.auth-locked main {
+  display: none;
+}
+.login-overlay { display: none; }
+body.auth-locked .login-overlay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+.login-form {
+  background: var(--card-bg);
+  border-radius: 14px;
+  box-shadow: var(--shadow-md);
+  padding: 32px 28px;
+  width: 100%;
+  max-width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: center;
+}
+.login-form h2 { margin: 0 0 4px; font-size: 1.1rem; color: var(--primary-dark); }
+.login-hint { margin: 0 0 8px; font-size: 0.85rem; color: var(--muted); }
+.login-form input {
+  font-size: 1rem;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  text-align: center;
+}
+.login-form .btn-primary { margin-top: 4px; width: 100%; }
+.login-error { color: var(--danger); font-size: 0.82rem; min-height: 1.2em; }
+.login-status { color: var(--muted); font-size: 0.8rem; }
 
 .tabs {
   display: flex;
@@ -115,6 +169,7 @@ main { max-width: 900px; margin: 0 auto; padding: 24px; }
   justify-content: center;
 }
 .unit-amount { font-size: 1.05rem; font-weight: 700; color: var(--primary-dark); line-height: 1.4; }
+.unit-amount-detail { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
 
 .note-field { margin-top: 16px; max-width: 400px; }
 

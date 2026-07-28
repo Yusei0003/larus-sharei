@@ -1,5 +1,13 @@
 import { initializeApp } from 'firebase/app';
 import {
+  getAuth,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  setPersistence,
+  browserLocalPersistence,
+} from 'firebase/auth';
+import {
   getFirestore,
   collection,
   doc,
@@ -19,8 +27,13 @@ const firebaseConfig = {
   appId: '1:629328903991:web:3355f7d00fdc90f86324b2',
 };
 
+const SHARED_EMAIL = 'rktkbsk.pg831@gmail.com';
+
 const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
 const db = getFirestore(app);
+
+setPersistence(auth, browserLocalPersistence).catch(() => {});
 
 const recordsCol = collection(db, 'sharei_records');
 const rosterDocRef = doc(db, 'sharei_meta', 'roster');
@@ -30,6 +43,15 @@ function fsDocToRecord(d) {
 }
 
 window.FirebaseData = {
+  onAuthChange(cb) {
+    return onAuthStateChanged(auth, cb);
+  },
+  async signIn(password) {
+    await signInWithEmailAndPassword(auth, SHARED_EMAIL, password);
+  },
+  async signOut() {
+    await signOut(auth);
+  },
   subscribeRecords(cb) {
     return onSnapshot(
       recordsCol,

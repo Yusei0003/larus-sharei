@@ -6,10 +6,22 @@
 <title>謝礼金 取りまとめ | KESEN LARUS BASKETBALL CLUB</title>
 <link rel="stylesheet" href="style.css?v=20260728074005">
 </head>
-<body>
+<body class="auth-locked">
+<div id="login-overlay" class="login-overlay">
+  <form id="login-form" class="login-form">
+    <h2>謝礼金 取りまとめ</h2>
+    <p class="login-hint">合言葉を入力してください</p>
+    <input type="password" id="login-pin" placeholder="合言葉" autocomplete="current-password" autofocus>
+    <button type="submit" class="btn-primary">ログイン</button>
+    <div id="login-error" class="login-error"></div>
+    <div id="login-status" class="login-status">確認中...</div>
+  </form>
+</div>
+
 <header class="app-header">
   <h1>謝礼金 取りまとめ</h1>
-  <p class="subtitle">帯同審判・コミッショナー謝礼金（KESEN LARUS BASKETBALL CLUB 交通費等及び謝礼金支給規程 第5条・第6条）</p>
+  <p class="subtitle">帯同審判・コミッショナー・その他従事者への謝礼金（KESEN LARUS BASKETBALL CLUB 交通費等及び謝礼金支給規程 第5条・第6条 等）</p>
+  <button type="button" id="btn-logout" class="logout-btn">ログアウト</button>
 </header>
 
 <nav class="tabs">
@@ -32,6 +44,7 @@
           <select id="f-role">
             <option value="referee">帯同審判</option>
             <option value="commissioner">コミッショナー</option>
+            <option value="other">その他</option>
           </select>
         </label>
 
@@ -39,7 +52,7 @@
           試合種別
           <select id="f-gametype">
             <option value="practice_game">練習試合</option>
-            <option value="official_game">公式戦（2,500円/試合）</option>
+            <option value="official_game">公式戦（1試合あたり2,500円）</option>
           </select>
         </label>
 
@@ -59,10 +72,31 @@
           </select>
         </label>
 
-        <div class="field-group unit-amount-box">
+        <label class="field-group" id="group-gamecount">
+          試合数
+          <select id="f-gamecount">
+            <option value="1">1試合</option>
+            <option value="2">2試合</option>
+            <option value="3">3試合</option>
+          </select>
+        </label>
+
+        <div class="field-group unit-amount-box" id="group-unit-amount">
           支給額
           <div class="unit-amount" id="f-unit-amount">¥2,000</div>
+          <div class="unit-amount-detail" id="f-unit-amount-detail"></div>
         </div>
+      </div>
+
+      <div class="form-grid form-grid-compact" id="group-other-fields">
+        <label class="field-group">
+          内容
+          <input type="text" id="f-other-content" placeholder="例）会場設営、記録係 など">
+        </label>
+        <label class="field-group">
+          支給額
+          <input type="number" id="f-other-amount" placeholder="金額を入力" step="1" min="0">
+        </label>
       </div>
 
       <div class="form-grid form-grid-compact">

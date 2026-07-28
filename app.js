@@ -1,7 +1,7 @@
 'use strict';
 
 /* ============================================================
- * 支給ルール（KESEN LARUS BASKETBALL CLUB 交通費等及び謝礼金支給規程 第5条・第6条）
+ * 支給ルール（KESEN LARUS BASKETBALL CLUB 交通費等及び謝礼金支給規程 第5条・第6条 等）
  * ============================================================ */
 const RULES = {
   referee: {
@@ -23,9 +23,15 @@ const RULES = {
   },
 };
 
+const ROLE_LABELS = { referee: '帯同審判', commissioner: 'コミッショナー', other: 'その他' };
 const LOCATION_LABEL = { in: '気仙管内', out: '気仙管外' };
 const DURATION_LABEL = { half: '半日（4h以内・1試合）', full: '1日（4h超）' };
 const OTHER_VALUE = '__other__';
+
+/* 審判の公式戦・コミッショナーは1試合あたりの金額のため、試合数(最大3)を掛ける */
+function gameCountApplies(role, gametype) {
+  return role === 'commissioner' || (role === 'referee' && gametype === 'official_game');
+}
 
 function calcUnitAmount(role, { gametype, location, duration }) {
   if (role === 'referee') {
@@ -41,20 +47,27 @@ function calcUnitAmount(role, { gametype, location, duration }) {
 }
 
 function roleLabel(role) {
-  return RULES[role]?.label ?? role;
+  return ROLE_LABELS[role] ?? role;
 }
 
 function describeEntry(r) {
+  if (r.role === 'other') {
+    return r.otherContent || '';
+  }
   if (r.role === 'referee') {
     const gt = RULES.referee.gametype[r.gametype];
     const parts = [gt?.label];
     if (r.gametype === 'practice_game') {
       parts.push(LOCATION_LABEL[r.location], DURATION_LABEL[r.duration]);
+    } else if (r.gametype === 'official_game' && r.gamecount) {
+      parts.push(`${r.gamecount}試合`);
     }
     return parts.filter(Boolean).join(' / ');
   }
   if (r.role === 'commissioner') {
-    return LOCATION_LABEL[r.location];
+    const parts = [LOCATION_LABEL[r.location]];
+    if (r.gamecount) parts.push(`${r.gamecount}試合`);
+    return parts.filter(Boolean).join(' / ');
   }
   return '';
 }
@@ -123,6 +136,7 @@ function initForm() {
   });
   document.getElementById('f-location').addEventListener('change', updateUnitAmount);
   document.getElementById('f-duration').addEventListener('change', updateUnitAmount);
+  document.getElementById('f-gamecount').addEventListener('change', updateUnitAmount);
   document.getElementById('f-name-select').addEventListener('change', updateNameFieldVisibility);
 
   updateConditionalFields();
@@ -138,11 +152,6 @@ function initForm() {
     }
 
     const role = document.getElementById('f-role').value;
-    const gametype = role === 'referee' ? document.getElementById('f-gametype').value : undefined;
-    const showLocDur = role === 'commissioner' || (role === 'referee' && gametype === 'practice_game');
-    const location = showLocDur ? document.getElementById('f-location').value : undefined;
-    const duration = role === 'referee' && gametype === 'practice_game' ? document.getElementById('f-duration').value : undefined;
-    const amount = calcUnitAmount(role, { gametype, location, duration });
 
     const nameSelectValue = document.getElementById('f-name-select').value;
     let name;
@@ -161,7 +170,31 @@ function initForm() {
     }
 
     const note = document.getElementById('f-note').value;
-    const record = { date, role, gametype, location, duration, amount, name, note };
+    let record;
+
+    if (role === 'other') {
+      const otherContent = document.getElementById('f-other-content').value.trim();
+      const amount = Number(document.getElementById('f-other-amount').value);
+      if (!otherContent) {
+        alert('内容を入力してください');
+        return;
+      }
+      if (!Number.isFinite(amount) || amount < 0) {
+        alert('支給額を正しく入力してください');
+        return;
+      }
+      record = { date, role, otherContent, amount, name, note };
+    } else {
+      const gametype = role === 'referee' ? document.getElementById('f-gametype').value : undefined;
+      const showLocation = role === 'commissioner' || (role === 'referee' && gametype === 'practice_game');
+      const location = showLocation ? document.getElementById('f-location').value : undefined;
+      const duration = role === 'referee' && gametype === 'practice_game' ? document.getElementById('f-duration').value : undefined;
+      const applyCount = gameCountApplies(role, gametype);
+      const gamecount = applyCount ? Number(document.getElementById('f-gamecount').value) : undefined;
+      const unit = calcUnitAmount(role, { gametype, location, duration });
+      const amount = unit * (applyCount ? gamecount : 1);
+      record = { date, role, gametype, location, duration, gamecount, amount, name, note };
+    }
 
     const submitBtn = form.querySelector('.btn-primary');
     submitBtn.disabled = true;
@@ -169,6 +202,10 @@ function initForm() {
       .then(() => {
         showToast('登録しました');
         document.getElementById('f-note').value = '';
+        if (role === 'other') {
+          document.getElementById('f-other-content').value = '';
+          document.getElementById('f-other-amount').value = '';
+        }
         if (nameSelectValue === OTHER_VALUE) document.getElementById('f-name-other').value = '';
       })
       .catch((err) => {
@@ -184,21 +221,32 @@ function initForm() {
 function updateConditionalFields() {
   const role = document.getElementById('f-role').value;
   const gametype = document.getElementById('f-gametype').value;
+  const isOther = role === 'other';
   const isPracticeGame = role === 'referee' && gametype === 'practice_game';
-  const showLocation = role === 'commissioner' || isPracticeGame;
+  const showLocation = !isOther && (role === 'commissioner' || isPracticeGame);
+  const showGamecount = !isOther && gameCountApplies(role, gametype);
 
   document.getElementById('group-gametype').style.display = role === 'referee' ? '' : 'none';
   document.getElementById('group-location').style.display = showLocation ? '' : 'none';
   document.getElementById('group-duration').style.display = isPracticeGame ? '' : 'none';
+  document.getElementById('group-gamecount').style.display = showGamecount ? '' : 'none';
+  document.getElementById('group-unit-amount').style.display = isOther ? 'none' : '';
+  document.getElementById('group-other-fields').style.display = isOther ? '' : 'none';
 }
 
 function updateUnitAmount() {
   const role = document.getElementById('f-role').value;
+  if (role === 'other') return;
   const gametype = document.getElementById('f-gametype').value;
   const location = document.getElementById('f-location').value;
   const duration = document.getElementById('f-duration').value;
-  const amount = calcUnitAmount(role, { gametype, location, duration });
-  document.getElementById('f-unit-amount').textContent = yen(amount);
+  const unit = calcUnitAmount(role, { gametype, location, duration });
+  const applyCount = gameCountApplies(role, gametype);
+  const gamecount = applyCount ? Number(document.getElementById('f-gamecount').value) : 1;
+  const total = unit * gamecount;
+
+  document.getElementById('f-unit-amount').textContent = yen(total);
+  document.getElementById('f-unit-amount-detail').textContent = applyCount ? `${yen(unit)} × ${gamecount}試合` : '';
 }
 
 function updateNameFieldVisibility() {
@@ -351,24 +399,107 @@ function initList() {
 }
 
 /* ============================================================
- * 初期化（ログイン不要。Firestoreの専用データ領域に直接同期）
+ * 認証（共有の合言葉でFirebase Authenticationにログイン。交通費アプリと同じアカウント）
  * ============================================================ */
-function initSync() {
-  window.FirebaseData.subscribeRecords((recs) => {
-    records = recs;
-    renderList();
+function rerenderAll() {
+  renderList();
+  renderNameSelect();
+  renderRosterList();
+}
+
+function initAuth() {
+  const loginForm = document.getElementById('login-form');
+  const loginPin = document.getElementById('login-pin');
+  const loginError = document.getElementById('login-error');
+  const loginStatus = document.getElementById('login-status');
+  const logoutBtn = document.getElementById('btn-logout');
+
+  let unsubscribeRecords = null;
+  let unsubscribeRoster = null;
+  let autoLoginAttempted = false;
+
+  const urlKey = new URLSearchParams(location.search).get('key');
+  if (urlKey) {
+    loginStatus.textContent = '自動ログイン中...';
+  }
+
+  function tryAutoLogin() {
+    if (autoLoginAttempted || !urlKey) return;
+    autoLoginAttempted = true;
+    window.FirebaseData.signIn(urlKey)
+      .then(() => {
+        history.replaceState(null, '', location.pathname + location.hash);
+      })
+      .catch((err) => {
+        console.error('auto signIn failed', err);
+        loginError.textContent = 'URLの合言葉が正しくありません。手動で入力してください';
+      });
+  }
+
+  window.FirebaseData.onAuthChange((user) => {
+    loginStatus.style.display = 'none';
+
+    if (!user) {
+      // signIn()が同じonAuthChangeコールバックを同期的に再入呼び出しするため、
+      // 今回のコールバック処理が完了してから実行する
+      setTimeout(tryAutoLogin, 0);
+    }
+
+    if (user) {
+      document.body.classList.remove('auth-locked');
+      loginError.textContent = '';
+      loginPin.value = '';
+      if (!unsubscribeRecords) {
+        unsubscribeRecords = window.FirebaseData.subscribeRecords((recs) => {
+          records = recs;
+          renderList();
+        });
+      }
+      if (!unsubscribeRoster) {
+        unsubscribeRoster = window.FirebaseData.subscribeRoster((names) => {
+          rosterNames = names;
+          renderNameSelect();
+          renderRosterList();
+        });
+      }
+    } else {
+      document.body.classList.add('auth-locked');
+      if (unsubscribeRecords) {
+        unsubscribeRecords();
+        unsubscribeRecords = null;
+      }
+      if (unsubscribeRoster) {
+        unsubscribeRoster();
+        unsubscribeRoster = null;
+      }
+      records = [];
+      rosterNames = [];
+    }
   });
-  window.FirebaseData.subscribeRoster((names) => {
-    rosterNames = names;
-    renderNameSelect();
-    renderRosterList();
+
+  loginForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const pin = loginPin.value;
+    if (!pin) return;
+    loginError.textContent = '';
+    window.FirebaseData.signIn(pin).catch((err) => {
+      console.error('signIn failed', err);
+      loginError.textContent = '合言葉が正しくありません';
+    });
+  });
+
+  logoutBtn.addEventListener('click', () => {
+    window.FirebaseData.signOut();
   });
 }
 
+/* ============================================================
+ * 初期化
+ * ============================================================ */
 document.addEventListener('DOMContentLoaded', () => {
   initTabs();
   initForm();
   initRoster();
   initList();
-  initSync();
+  initAuth();
 });
