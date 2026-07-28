@@ -9,23 +9,22 @@ const RULES = {
     gametype: {
       practice_game: {
         label: '練習試合',
-        table: {
-          in: { half: 2000, full: 4000 },
-          out: { half: 3000, full: 5000 },
-        },
+        /* 気仙管内・気仙管外とも基本額は同じ。気仙管外はさらに交通費(定額)または弁当支給が加わる */
+        base: { half: 2000, full: 4000 },
       },
       official_game: { label: '公式戦', flat: 2500 },
     },
   },
   commissioner: {
     label: 'コミッショナー',
-    /* 気仙管外は謝礼(試合数分)＋交通費(1日1回のみ)の合計。気仙管内は交通費なし */
-    location: {
-      in: { honorarium: 1000, transport: 0 },
-      out: { honorarium: 1000, transport: 1000 },
-    },
+    /* 謝礼は試合数分。気仙管外はさらに交通費(定額・1日1回のみ)または弁当支給が加わる */
+    honorarium: 1000,
   },
 };
+
+/* 気仙管外の場合に加算される交通費の定額（弁当支給を選んだ場合は加算しない） */
+const OUT_SUPPLEMENT = 1000;
+const OUT_SUPPLY_LABEL = { transport: '交通費', bento: '弁当' };
 
 const ROLE_LABELS = { referee: '帯同審判', commissioner: 'コミッショナー', other: 'その他' };
 const LOCATION_LABEL = { in: '気仙管内', out: '気仙管外' };
@@ -37,33 +36,34 @@ function gameCountApplies(role, gametype) {
   return role === 'commissioner' || (role === 'referee' && gametype === 'official_game');
 }
 
-function calcAmount(role, { gametype, location, duration, gamecount }) {
+function outSupplement(location, outSupply) {
+  return location === 'out' && outSupply !== 'bento' ? OUT_SUPPLEMENT : 0;
+}
+
+function calcAmount(role, { gametype, location, duration, gamecount, outSupply }) {
   if (role === 'referee') {
     const gt = RULES.referee.gametype[gametype];
     if (!gt) return 0;
     if (gt.flat !== undefined) return gt.flat * (gamecount || 1);
-    return gt.table[location]?.[duration] ?? 0;
+    return (gt.base[duration] ?? 0) + outSupplement(location, outSupply);
   }
   if (role === 'commissioner') {
-    const conf = RULES.commissioner.location[location];
-    if (!conf) return 0;
-    return conf.honorarium * (gamecount || 1) + conf.transport;
+    return RULES.commissioner.honorarium * (gamecount || 1) + outSupplement(location, outSupply);
   }
   return 0;
 }
 
-function amountBreakdownText(role, { gametype, location, gamecount }) {
+function amountBreakdownText(role, { gametype, location, gamecount, outSupply }) {
+  const parts = [];
   if (role === 'referee' && gametype === 'official_game') {
-    return `${yen(RULES.referee.gametype.official_game.flat)} × ${gamecount}試合`;
+    parts.push(`${yen(RULES.referee.gametype.official_game.flat)} × ${gamecount}試合`);
+  } else if (role === 'commissioner') {
+    parts.push(`謝礼 ${yen(RULES.commissioner.honorarium)} × ${gamecount}試合`);
   }
-  if (role === 'commissioner') {
-    const conf = RULES.commissioner.location[location];
-    if (!conf) return '';
-    const parts = [`謝礼 ${yen(conf.honorarium)} × ${gamecount}試合`];
-    if (conf.transport > 0) parts.push(`交通費 ${yen(conf.transport)}`);
-    return parts.join(' + ');
+  if (location === 'out') {
+    parts.push(outSupply === 'bento' ? '弁当支給（気仙管外）' : `交通費 ${yen(OUT_SUPPLEMENT)}（気仙管外）`);
   }
-  return '';
+  return parts.join(' + ');
 }
 
 function roleLabel(role) {
@@ -79,6 +79,7 @@ function describeEntry(r) {
     const parts = [gt?.label];
     if (r.gametype === 'practice_game') {
       parts.push(LOCATION_LABEL[r.location], DURATION_LABEL[r.duration]);
+      if (r.location === 'out') parts.push(OUT_SUPPLY_LABEL[r.outSupply] ?? OUT_SUPPLY_LABEL.transport);
     } else if (r.gametype === 'official_game' && r.gamecount) {
       parts.push(`${r.gamecount}試合`);
     }
@@ -87,6 +88,7 @@ function describeEntry(r) {
   if (r.role === 'commissioner') {
     const parts = [LOCATION_LABEL[r.location]];
     if (r.gamecount) parts.push(`${r.gamecount}試合`);
+    if (r.location === 'out') parts.push(OUT_SUPPLY_LABEL[r.outSupply] ?? OUT_SUPPLY_LABEL.transport);
     return parts.filter(Boolean).join(' / ');
   }
   return '';
@@ -135,6 +137,7 @@ function initTabs() {
       btn.classList.add('active');
       document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
       if (btn.dataset.tab === 'list') renderList();
+      if (btn.dataset.tab === 'dashboard') renderDashboard();
     });
   });
 }
@@ -155,9 +158,13 @@ function initForm() {
     updateConditionalFields();
     updateUnitAmount();
   });
-  document.getElementById('f-location').addEventListener('change', updateUnitAmount);
+  document.getElementById('f-location').addEventListener('change', () => {
+    updateConditionalFields();
+    updateUnitAmount();
+  });
   document.getElementById('f-duration').addEventListener('change', updateUnitAmount);
   document.getElementById('f-gamecount').addEventListener('change', updateUnitAmount);
+  document.getElementById('f-out-supply').addEventListener('change', updateUnitAmount);
   document.getElementById('f-name-select').addEventListener('change', updateNameFieldVisibility);
 
   updateConditionalFields();
@@ -213,8 +220,9 @@ function initForm() {
       const duration = role === 'referee' && gametype === 'practice_game' ? document.getElementById('f-duration').value : undefined;
       const applyCount = gameCountApplies(role, gametype);
       const gamecount = applyCount ? Number(document.getElementById('f-gamecount').value) : undefined;
-      const amount = calcAmount(role, { gametype, location, duration, gamecount });
-      record = { date, role, gametype, location, duration, gamecount, amount, name, note, venue };
+      const outSupply = showLocation && location === 'out' ? document.getElementById('f-out-supply').value : undefined;
+      const amount = calcAmount(role, { gametype, location, duration, gamecount, outSupply });
+      record = { date, role, gametype, location, duration, gamecount, outSupply, amount, name, note, venue };
     }
 
     const submitBtn = form.querySelector('.btn-primary');
@@ -242,14 +250,17 @@ function initForm() {
 function updateConditionalFields() {
   const role = document.getElementById('f-role').value;
   const gametype = document.getElementById('f-gametype').value;
+  const location = document.getElementById('f-location').value;
   const isOther = role === 'other';
   const isPracticeGame = role === 'referee' && gametype === 'practice_game';
   const showLocation = !isOther && (role === 'commissioner' || isPracticeGame);
   const showGamecount = !isOther && gameCountApplies(role, gametype);
+  const showOutSupply = showLocation && location === 'out';
 
   document.getElementById('group-gametype').style.display = role === 'referee' ? '' : 'none';
   document.getElementById('group-location').style.display = showLocation ? '' : 'none';
   document.getElementById('group-duration').style.display = isPracticeGame ? '' : 'none';
+  document.getElementById('group-out-supply').style.display = showOutSupply ? '' : 'none';
   document.getElementById('group-gamecount').style.display = showGamecount ? '' : 'none';
   document.getElementById('group-unit-amount').style.display = isOther ? 'none' : '';
   document.getElementById('group-other-fields').style.display = isOther ? '' : 'none';
@@ -259,14 +270,17 @@ function updateUnitAmount() {
   const role = document.getElementById('f-role').value;
   if (role === 'other') return;
   const gametype = document.getElementById('f-gametype').value;
-  const location = document.getElementById('f-location').value;
+  const isPracticeGame = role === 'referee' && gametype === 'practice_game';
+  const showLocation = role === 'commissioner' || isPracticeGame;
+  const location = showLocation ? document.getElementById('f-location').value : undefined;
   const duration = document.getElementById('f-duration').value;
+  const outSupply = document.getElementById('f-out-supply').value;
   const applyCount = gameCountApplies(role, gametype);
   const gamecount = applyCount ? Number(document.getElementById('f-gamecount').value) : 1;
-  const total = calcAmount(role, { gametype, location, duration, gamecount });
+  const total = calcAmount(role, { gametype, location, duration, gamecount, outSupply });
 
   document.getElementById('f-unit-amount').textContent = yen(total);
-  document.getElementById('f-unit-amount-detail').textContent = applyCount ? amountBreakdownText(role, { gametype, location, gamecount }) : '';
+  document.getElementById('f-unit-amount-detail').textContent = amountBreakdownText(role, { gametype, location, gamecount, outSupply });
 }
 
 function updateNameFieldVisibility() {
@@ -504,10 +518,20 @@ function eventLabel(r) {
   return typeText ? `${d}　${typeText}` : d;
 }
 
+function outSupplyRow(r) {
+  if (r.location !== 'out') return null;
+  if (r.outSupply === 'bento') return { label: '弁当（気仙管外）', inKind: true };
+  return { label: '交通費（気仙管外）', amount: OUT_SUPPLEMENT };
+}
+
 function buildReceiptRows(r) {
   if (r.role === 'referee') {
     if (r.gametype === 'practice_game') {
-      return [{ label: DURATION_LABEL[r.duration] || '', amount: r.amount }];
+      const base = RULES.referee.gametype.practice_game.base[r.duration] ?? 0;
+      const rows = [{ label: DURATION_LABEL[r.duration] || '', amount: base }];
+      const supply = outSupplyRow(r);
+      if (supply) rows.push(supply);
+      return rows;
     }
     if (r.gametype === 'official_game') {
       const unit = RULES.referee.gametype.official_game.flat;
@@ -515,11 +539,11 @@ function buildReceiptRows(r) {
     }
   }
   if (r.role === 'commissioner') {
-    const conf = RULES.commissioner.location[r.location];
     const gamecount = r.gamecount || 1;
-    const honorarium = (conf?.honorarium ?? 0) * gamecount;
-    const rows = [{ label: `謝礼（${yen(conf?.honorarium ?? 0)} × ${gamecount}試合）`, amount: honorarium }];
-    if (conf && conf.transport > 0) rows.push({ label: '交通費', amount: conf.transport });
+    const honorarium = RULES.commissioner.honorarium * gamecount;
+    const rows = [{ label: `謝礼（${yen(RULES.commissioner.honorarium)} × ${gamecount}試合）`, amount: honorarium }];
+    const supply = outSupplyRow(r);
+    if (supply) rows.push(supply);
     return rows;
   }
   if (r.role === 'other') {
@@ -537,7 +561,7 @@ function renderReceiptPrintArea(recordsToPrint) {
       const phone = contactsCache.phones[r.name] || '';
       const address = contactsCache.addresses[r.name] || '';
       const rowsHtml = rows
-        .map((row) => `<tr><td class="rc-item-label">${escapeHtml(row.label)}</td><td class="rc-num">${numFmt(row.amount)} 円</td></tr>`)
+        .map((row) => `<tr><td class="rc-item-label">${escapeHtml(row.label)}</td><td class="rc-num">${row.inKind ? '支給' : numFmt(row.amount) + ' 円'}</td></tr>`)
         .join('');
 
       return `
@@ -583,6 +607,213 @@ function handleReceiptClick(record) {
 
 function initContactSettings() {
   renderContactSettingsBody();
+}
+
+/* ============================================================
+ * ダッシュボード
+ * ============================================================ */
+const CATEGORY_CHART_COLORS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)'];
+const PEOPLE_CHART_COLORS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)', 'var(--series-5)', 'var(--series-6)'];
+const FISCAL_MONTH_LABELS = ['4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月', '1月', '2月', '3月'];
+const DASH_CATEGORY_DEFS = [
+  { label: '帯同審判(練習試合)', match: (r) => r.role === 'referee' && r.gametype === 'practice_game' },
+  { label: '帯同審判(公式戦)', match: (r) => r.role === 'referee' && r.gametype === 'official_game' },
+  { label: 'コミッショナー', match: (r) => r.role === 'commissioner' },
+  { label: 'その他', match: (r) => r.role === 'other' },
+];
+const DASH_PEOPLE_CHART_LIMIT = 12;
+
+/* 年度は4月始まり(その年の4月〜翌年3月)。fiscalYearOfは年度の開始年(西暦)を返す */
+function fiscalYearOf(dateStr) {
+  const y = Number(dateStr.slice(0, 4));
+  const m = Number(dateStr.slice(5, 7));
+  return m >= 4 ? y : y - 1;
+}
+
+function fiscalMonthIndex(dateStr) {
+  const m = Number(dateStr.slice(5, 7));
+  return m >= 4 ? m - 4 : m + 8;
+}
+
+function fiscalYearLabel(fy) {
+  const reiwaYear = fy - 2018;
+  return `令和${reiwaYear}年度（${fy}年4月〜${fy + 1}年3月）`;
+}
+
+function getFiscalYearsWithData() {
+  const years = new Set(records.map((r) => fiscalYearOf(r.date)));
+  years.add(fiscalYearOf(new Date().toISOString().slice(0, 10)));
+  return [...years].sort((a, b) => b - a);
+}
+
+function computeAnnualData(fiscalYear) {
+  const yearRecords = records.filter((r) => fiscalYearOf(r.date) === fiscalYear);
+
+  const monthly = Array(12).fill(0);
+  yearRecords.forEach((r) => {
+    monthly[fiscalMonthIndex(r.date)] += Number(r.amount) || 0;
+  });
+  const total = monthly.reduce((a, b) => a + b, 0);
+  const count = yearRecords.length;
+
+  const categories = DASH_CATEGORY_DEFS.map((def) => ({
+    label: def.label,
+    total: yearRecords.filter(def.match).reduce((s, r) => s + (Number(r.amount) || 0), 0),
+  }));
+
+  const amountByName = new Map();
+  const countByName = new Map();
+  yearRecords.forEach((r) => {
+    amountByName.set(r.name, (amountByName.get(r.name) || 0) + (Number(r.amount) || 0));
+    countByName.set(r.name, (countByName.get(r.name) || 0) + 1);
+  });
+  const people = [...amountByName.keys()]
+    .map((name) => ({ name, amount: amountByName.get(name), count: countByName.get(name) }))
+    .sort((a, b) => b.amount - a.amount);
+
+  const monthsWithData = monthly.filter((v) => v > 0).length;
+  const monthlyAverage = monthsWithData === 0 ? 0 : Math.round(total / monthsWithData);
+  const topPerson = people[0] || null;
+
+  return { fiscalYear, monthly, total, count, categories, people, monthlyAverage, topPerson };
+}
+
+function initDashboard() {
+  document.getElementById('dash-year').addEventListener('change', renderDashboard);
+}
+
+function renderDashboard() {
+  const yearSel = document.getElementById('dash-year');
+  const years = getFiscalYearsWithData();
+  const keep = yearSel.value ? Number(yearSel.value) : fiscalYearOf(new Date().toISOString().slice(0, 10));
+  yearSel.innerHTML = years.map((y) => `<option value="${y}">${escapeHtml(fiscalYearLabel(y))}</option>`).join('');
+  yearSel.value = years.includes(keep) ? keep : years[0];
+
+  const data = computeAnnualData(Number(yearSel.value));
+  renderDashTiles(data);
+  renderMonthlyChart(data);
+  renderCategoryChart(data);
+  renderPeopleChart(data);
+}
+
+function renderDashTiles(data) {
+  const tiles = [
+    { label: '年間合計費用', value: yen(data.total) },
+    { label: '支払件数', value: `${data.count} 件` },
+    { label: '活動月平均費用', value: yen(data.monthlyAverage), sub: '記録のある月の平均' },
+    {
+      label: '支払額トップ',
+      value: data.topPerson ? data.topPerson.name : '-',
+      sub: data.topPerson ? `${yen(data.topPerson.amount)}（${data.topPerson.count}件）` : '',
+    },
+  ];
+  document.getElementById('dash-tiles').innerHTML = tiles
+    .map(
+      (t) => `
+    <div class="stat-tile">
+      <div class="stat-tile-label">${escapeHtml(t.label)}</div>
+      <div class="stat-tile-value">${escapeHtml(String(t.value))}</div>
+      ${t.sub ? `<div class="stat-tile-sub">${escapeHtml(t.sub)}</div>` : ''}
+    </div>`
+    )
+    .join('');
+}
+
+function showChartTooltip(evt, text) {
+  const tip = document.getElementById('chart-tooltip');
+  tip.textContent = text;
+  tip.style.left = evt.clientX + 'px';
+  tip.style.top = evt.clientY + 'px';
+  tip.classList.add('show');
+}
+function moveChartTooltip(evt) {
+  const tip = document.getElementById('chart-tooltip');
+  tip.style.left = evt.clientX + 'px';
+  tip.style.top = evt.clientY + 'px';
+}
+function hideChartTooltip() {
+  document.getElementById('chart-tooltip').classList.remove('show');
+}
+
+function renderBarChart(containerId, items, colors, options = {}) {
+  const container = document.getElementById(containerId);
+  const max = Math.max(...items.map((i) => i.value), 1);
+  const showValueLabel = options.showValueLabel !== false;
+
+  container.innerHTML = items
+    .map((item, i) => {
+      const heightPct = item.value > 0 ? Math.max((item.value / max) * 100, 2) : 0;
+      const color = typeof colors === 'function' ? colors(i) : colors[i % colors.length];
+      const tooltip = `${item.label}: ${yen(item.value)}`;
+      return `
+      <div class="chart-bar-col" data-tooltip="${escapeHtml(tooltip)}">
+        ${showValueLabel && item.value > 0 ? `<div class="chart-bar-value">${yen(item.value)}</div>` : ''}
+        <div class="chart-bar" style="height:${heightPct}%; background:${color}"></div>
+        <div class="chart-bar-label">${escapeHtml(item.label)}</div>
+      </div>`;
+    })
+    .join('');
+
+  container.querySelectorAll('.chart-bar-col').forEach((col) => {
+    col.addEventListener('mouseenter', (e) => showChartTooltip(e, col.dataset.tooltip));
+    col.addEventListener('mousemove', moveChartTooltip);
+    col.addEventListener('mouseleave', hideChartTooltip);
+  });
+}
+
+function renderMonthlyChart(data) {
+  const items = data.monthly.map((v, i) => ({ label: FISCAL_MONTH_LABELS[i], value: v }));
+  renderBarChart('dash-monthly-chart', items, ['var(--primary)'], { showValueLabel: false });
+
+  document.getElementById('dash-monthly-table').innerHTML = items
+    .map((it) => `<tr><td>${escapeHtml(it.label)}</td><td class="num">${yen(it.value)}</td></tr>`)
+    .join('');
+}
+
+function renderCategoryChart(data) {
+  renderBarChart(
+    'dash-category-chart',
+    data.categories.map((c) => ({ label: c.label, value: c.total })),
+    CATEGORY_CHART_COLORS
+  );
+
+  document.getElementById('dash-category-legend').innerHTML = data.categories
+    .map(
+      (c, i) =>
+        `<span class="chart-legend-item"><span class="chart-legend-swatch" style="background:${CATEGORY_CHART_COLORS[i]}"></span>${escapeHtml(c.label)}</span>`
+    )
+    .join('');
+
+  document.getElementById('dash-category-table').innerHTML = data.categories
+    .map((c) => {
+      const pct = data.total === 0 ? 0 : Math.round((c.total / data.total) * 100);
+      return `<tr><td>${escapeHtml(c.label)}</td><td class="num">${yen(c.total)}</td><td class="num">${pct}%</td></tr>`;
+    })
+    .join('');
+}
+
+function renderPeopleChart(data) {
+  const chartPeople = data.people.slice(0, DASH_PEOPLE_CHART_LIMIT);
+  renderBarChart(
+    'dash-people-chart',
+    chartPeople.map((p) => ({ label: p.name, value: p.amount })),
+    PEOPLE_CHART_COLORS
+  );
+
+  document.getElementById('dash-people-legend').innerHTML =
+    chartPeople
+      .map(
+        (p, i) =>
+          `<span class="chart-legend-item"><span class="chart-legend-swatch" style="background:${PEOPLE_CHART_COLORS[i % PEOPLE_CHART_COLORS.length]}"></span>${escapeHtml(p.name)}</span>`
+      )
+      .join('') + (data.people.length > DASH_PEOPLE_CHART_LIMIT ? `<span class="chart-legend-item">他 ${data.people.length - DASH_PEOPLE_CHART_LIMIT} 名</span>` : '');
+
+  document.getElementById('dash-people-table').innerHTML = data.people
+    .map((p) => {
+      const pct = data.total === 0 ? 0 : Math.round((p.amount / data.total) * 100);
+      return `<tr><td>${escapeHtml(p.name)}</td><td class="num">${yen(p.amount)}</td><td class="num">${p.count}件</td><td class="num">${pct}%</td></tr>`;
+    })
+    .join('');
 }
 
 /* ============================================================
@@ -635,6 +866,7 @@ function initAuth() {
         unsubscribeRecords = window.FirebaseData.subscribeRecords((recs) => {
           records = recs;
           renderList();
+          renderDashboard();
         });
       }
       if (!unsubscribeRoster) {
@@ -696,5 +928,6 @@ document.addEventListener('DOMContentLoaded', () => {
   initRoster();
   initContactSettings();
   initList();
+  initDashboard();
   initAuth();
 });

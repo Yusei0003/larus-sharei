@@ -27,6 +27,7 @@
 <nav class="tabs">
   <button class="tab-btn active" data-tab="entry">入力</button>
   <button class="tab-btn" data-tab="list">一覧</button>
+  <button class="tab-btn" data-tab="dashboard">ダッシュボード</button>
 </nav>
 
 <main>
@@ -69,6 +70,14 @@
           <select id="f-duration">
             <option value="half">半日（4h以内・1試合）</option>
             <option value="full">1日（4h超）</option>
+          </select>
+        </label>
+
+        <label class="field-group" id="group-out-supply">
+          気仙管外の支給方法
+          <select id="f-out-supply">
+            <option value="transport">交通費（1,000円）</option>
+            <option value="bento">弁当</option>
           </select>
         </label>
 
@@ -165,10 +174,59 @@
       </table>
     </div>
   </section>
+
+  <!-- ============ ダッシュボードタブ ============ -->
+  <section id="panel-dashboard" class="tab-panel">
+    <div class="filter-bar">
+      <label>対象年度
+        <select id="dash-year"></select>
+      </label>
+    </div>
+
+    <div class="stat-tiles" id="dash-tiles"></div>
+
+    <div class="dash-grid">
+      <div class="chart-card">
+        <h3 class="chart-title">月別費用推移</h3>
+        <div class="chart-bars" id="dash-monthly-chart"></div>
+        <div class="chart-table-wrap">
+          <table class="sheet-table chart-table">
+            <thead><tr><th>月</th><th>費用</th></tr></thead>
+            <tbody id="dash-monthly-table"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <h3 class="chart-title">区分別 費用内訳</h3>
+        <div class="chart-legend" id="dash-category-legend"></div>
+        <div class="chart-bars chart-bars-compact" id="dash-category-chart"></div>
+        <div class="chart-table-wrap">
+          <table class="sheet-table chart-table">
+            <thead><tr><th>区分</th><th>費用</th><th>割合</th></tr></thead>
+            <tbody id="dash-category-table"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="chart-card full-width">
+        <h3 class="chart-title">対象者別 支払状況</h3>
+        <div class="chart-legend" id="dash-people-legend"></div>
+        <div class="chart-bars chart-bars-compact" id="dash-people-chart"></div>
+        <div class="chart-table-wrap">
+          <table class="sheet-table chart-table">
+            <thead><tr><th>氏名</th><th>支払額</th><th>件数</th><th>割合</th></tr></thead>
+            <tbody id="dash-people-table"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
 </main>
 
 <div id="toast" class="toast"></div>
 <div id="receipt-print-area" class="receipt-print-area"></div>
+<div id="chart-tooltip" class="chart-tooltip"></div>
 
 <script src="firebase-bundle.js?v=20260728081813"></script>
 <script src="app.js?v=20260728081813"></script>
