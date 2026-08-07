@@ -109,6 +109,15 @@ function monthKey(dateStr) {
   return (dateStr || '').slice(0, 7); // YYYY-MM
 }
 
+/* 現地時間（JST想定）でのYYYY-MM-DDを返す。new Date().toISOString()はUTC基準になり、
+   日本時間の深夜0時台〜朝9時前は日付・月・年度がずれてしまうため使わない */
+function todayStr() {
+  const d = new Date();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -148,7 +157,7 @@ function initTabs() {
 function initForm() {
   const form = document.getElementById('entry-form');
 
-  document.getElementById('f-date').valueAsDate = new Date();
+  document.getElementById('f-date').value = todayStr();
 
   document.getElementById('f-role').addEventListener('change', () => {
     updateConditionalFields();
@@ -362,7 +371,7 @@ function renderList() {
   let monthFilter = document.getElementById('list-month-filter').value;
   if (!listMonthFilterTouched) {
     const months = [...new Set(records.map((r) => monthKey(r.date)))].sort().reverse();
-    monthFilter = months[0] || monthKey(new Date().toISOString());
+    monthFilter = months[0] || monthKey(todayStr());
   }
   const nameFilter = document.getElementById('list-name-filter').value.trim();
 
@@ -423,7 +432,7 @@ function renderList() {
 }
 
 function populateMonthOptions(current) {
-  const thisMonth = monthKey(new Date().toISOString());
+  const thisMonth = monthKey(todayStr());
   const months = [...new Set([...records.map((r) => monthKey(r.date)), thisMonth].filter(Boolean))].sort().reverse();
   const sel = document.getElementById('list-month-filter');
   const keep = current || sel.value;
@@ -642,7 +651,7 @@ function fiscalYearLabel(fy) {
 
 function getFiscalYearsWithData() {
   const years = new Set(records.map((r) => fiscalYearOf(r.date)));
-  years.add(fiscalYearOf(new Date().toISOString().slice(0, 10)));
+  years.add(fiscalYearOf(todayStr()));
   return [...years].sort((a, b) => b - a);
 }
 
@@ -685,7 +694,7 @@ function initDashboard() {
 function renderDashboard() {
   const yearSel = document.getElementById('dash-year');
   const years = getFiscalYearsWithData();
-  const keep = yearSel.value ? Number(yearSel.value) : fiscalYearOf(new Date().toISOString().slice(0, 10));
+  const keep = yearSel.value ? Number(yearSel.value) : fiscalYearOf(todayStr());
   yearSel.innerHTML = years.map((y) => `<option value="${y}">${escapeHtml(fiscalYearLabel(y))}</option>`).join('');
   yearSel.value = years.includes(keep) ? keep : years[0];
 
