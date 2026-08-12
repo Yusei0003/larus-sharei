@@ -610,6 +610,316 @@ function initContactSettings() {
 }
 
 /* ============================================================
+ * バックアップ（Excel出力・CSV取込）
+ * ============================================================ */
+const BACKUP_HEADER = ['日付', '氏名', '区分', '試合種別', '活動場所', '拘束時間', '試合数', '管外支給', '内容', '支給額', '大会開催地', '備考'];
+const DURATION_SIMPLE_LABEL = { half: '半日', full: '1日' };
+const DURATION_SIMPLE_REVERSE = { 半日: 'half', '1日': 'full' };
+const ROLE_LABEL_REVERSE = { 帯同審判: 'referee', コミッショナー: 'commissioner', その他: 'other' };
+const LOCATION_LABEL_REVERSE = { 気仙管内: 'in', 気仙管外: 'out' };
+const OUT_SUPPLY_LABEL_REVERSE = { 交通費: 'transport', 弁当: 'bento' };
+const GAMETYPE_LABEL_REVERSE = { 練習試合: 'practice_game', 公式戦: 'official_game' };
+
+function buildBackupRows() {
+  return records.map((r) => [
+    r.date,
+    r.name,
+    roleLabel(r.role),
+    r.role === 'referee' ? RULES.referee.gametype[r.gametype]?.label ?? '' : '',
+    r.location ? LOCATION_LABEL[r.location] : '',
+    r.duration ? DURATION_SIMPLE_LABEL[r.duration] ?? '' : '',
+    r.gamecount ?? '',
+    r.location === 'out' ? OUT_SUPPLY_LABEL[r.outSupply] ?? OUT_SUPPLY_LABEL.transport : '',
+    r.otherContent ?? '',
+    r.amount,
+    r.venue ?? '',
+    r.note ?? '',
+  ]);
+}
+
+function handleBackupExportClick() {
+  if (records.length === 0) {
+    alert('出力できる記録がありません');
+    return;
+  }
+  const rows = buildBackupRows();
+  const bytes = buildXlsxFile('謝礼金記録', BACKUP_HEADER, rows);
+  const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  downloadBytes(bytes, `謝礼金_バックアップ_${today}.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  showToast('バックアップを出力しました');
+}
+
+function parseCsv(text) {
+  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').filter((l) => l.length > 0);
+  return lines.map((line) => {
+    const cells = [];
+    let cur = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQuotes) {
+        if (ch === '"' && line[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else if (ch === '"') {
+          inQuotes = false;
+        } else {
+          cur += ch;
+        }
+      } else if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === ',') {
+        cells.push(cur);
+        cur = '';
+      } else {
+        cur += ch;
+      }
+    }
+    cells.push(cur);
+    return cells;
+  });
+}
+
+/* CSVの1行(cells)を、バックアップ形式のヘッダー(header)を手がかりに記録オブジェクトへ変換する。
+ * 必須項目が欠けている・区分や試合種別が認識できない場合はnullを返す */
+function parseBackupRow(cells, header) {
+  const idx = (name) => header.indexOf(name);
+  const get = (name) => {
+    const i = idx(name);
+    return i === -1 ? '' : (cells[i] ?? '').trim();
+  };
+
+  const date = get('日付');
+  const name = get('氏名');
+  const role = ROLE_LABEL_REVERSE[get('区分')];
+  const amount = Number(get('支給額'));
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !name || !role || !Number.isFinite(amount)) return null;
+
+  const record = { date, name, role, amount, venue: get('大会開催地'), note: get('備考') };
+
+  if (role === 'referee') {
+    const gametype = GAMETYPE_LABEL_REVERSE[get('試合種別')];
+    if (!gametype) return null;
+    record.gametype = gametype;
+    if (gametype === 'practice_game') {
+      const location = LOCATION_LABEL_REVERSE[get('活動場所')];
+      const duration = DURATION_SIMPLE_REVERSE[get('拘束時間')];
+      if (!location || !duration) return null;
+      record.location = location;
+      record.duration = duration;
+    } else {
+      const gc = Number(get('試合数'));
+      record.gamecount = Number.isFinite(gc) && gc > 0 ? gc : 1;
+    }
+  } else if (role === 'commissioner') {
+    const location = LOCATION_LABEL_REVERSE[get('活動場所')];
+    if (!location) return null;
+    record.location = location;
+    const gc = Number(get('試合数'));
+    record.gamecount = Number.isFinite(gc) && gc > 0 ? gc : 1;
+  } else if (role === 'other') {
+    const otherContent = get('内容');
+    if (!otherContent) return null;
+    record.otherContent = otherContent;
+  }
+
+  if (record.location === 'out') {
+    record.outSupply = OUT_SUPPLY_LABEL_REVERSE[get('管外支給')] || 'transport';
+  }
+
+  return record;
+}
+
+function handleImportCsv(text) {
+  const resultEl = document.getElementById('import-result');
+  const rows = parseCsv(text);
+  if (rows.length === 0) {
+    resultEl.textContent = 'ファイルが空です';
+    return;
+  }
+  const header = rows[0].map((h) => h.trim());
+  if (!header.includes('日付') || !header.includes('氏名') || !header.includes('区分') || !header.includes('支給額')) {
+    resultEl.textContent = 'CSVの形式が正しくありません（日付・氏名・区分・支給額の列が必要です）';
+    return;
+  }
+
+  let added = 0;
+  let duplicated = 0;
+  let invalid = 0;
+  const toAdd = [];
+
+  rows.slice(1).forEach((cells) => {
+    if (cells.length < 2) return;
+    const record = parseBackupRow(cells, header);
+    if (!record) {
+      invalid++;
+      return;
+    }
+
+    const isDuplicate = records.some(
+      (r) =>
+        r.date === record.date &&
+        r.name === record.name &&
+        r.role === record.role &&
+        r.gametype === record.gametype &&
+        r.location === record.location &&
+        r.duration === record.duration &&
+        r.gamecount === record.gamecount &&
+        r.outSupply === record.outSupply &&
+        r.otherContent === record.otherContent &&
+        Number(r.amount) === record.amount
+    );
+    if (isDuplicate) {
+      duplicated++;
+      return;
+    }
+
+    toAdd.push(record);
+    added++;
+  });
+
+  if (toAdd.length > 0) {
+    window.FirebaseData.addRecords(toAdd).catch((err) => {
+      console.error('addRecords failed', err);
+      alert('取込に失敗しました: ' + err.message);
+    });
+  }
+
+  const resultLines = [`${added}件を追加しました`];
+  if (duplicated > 0) resultLines.push(`（重複のためスキップ: ${duplicated}件）`);
+  if (invalid > 0) resultLines.push(`（形式不正のためスキップ: ${invalid}件）`);
+  resultEl.textContent = resultLines.join(' ');
+  if (added > 0) showToast(`${added}件をインポートしました`);
+}
+
+function initBackup() {
+  document.getElementById('btn-backup-export').addEventListener('click', handleBackupExportClick);
+  document.getElementById('import-file').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => handleImportCsv(String(reader.result));
+    reader.readAsText(file, 'utf-8');
+    e.target.value = '';
+  });
+}
+
+/* ============================================================
+ * 封筒印刷（長形3号・120x235mm、対象期間内の記録がある全員分）
+ * ============================================================ */
+function formatDisplayName(name) {
+  return name.length === 4 ? name.slice(0, 2) + '　' + name.slice(2) : name;
+}
+
+function reiwaYearOf(y) {
+  return y - 2018;
+}
+
+/* 単月なら「令和8年7月分」、複数月かつ同じ年度内なら「令和8年4月〜7月分」、
+ * 年をまたぐ場合は「令和7年12月〜令和8年3月分」のように両方の年を表記する */
+function formatEnvelopePeriod(startMonth, endMonth) {
+  const [sy, sm] = startMonth.split('-').map(Number);
+  const [ey, em] = endMonth.split('-').map(Number);
+  if (startMonth === endMonth) return `令和${reiwaYearOf(sy)}年${sm}月分`;
+  if (sy === ey) return `令和${reiwaYearOf(sy)}年${sm}月〜${em}月分`;
+  return `令和${reiwaYearOf(sy)}年${sm}月〜令和${reiwaYearOf(ey)}年${em}月分`;
+}
+
+function populateEnvelopeMonthOptions() {
+  const thisMonth = monthKey(new Date().toISOString());
+  const months = [...new Set([...records.map((r) => monthKey(r.date)), thisMonth].filter(Boolean))].sort().reverse();
+  const optsHtml = months.map((m) => `<option value="${m}">${m}</option>`).join('');
+  ['env-start-month', 'env-end-month'].forEach((id) => {
+    const sel = document.getElementById(id);
+    const keep = sel.value;
+    sel.innerHTML = optsHtml;
+    sel.value = months.includes(keep) ? keep : months[0] || '';
+  });
+}
+
+function buildEnvelopeEntries(startMonth, endMonth) {
+  const totals = new Map();
+  records
+    .filter((r) => {
+      const mk = monthKey(r.date);
+      return mk >= startMonth && mk <= endMonth;
+    })
+    .forEach((r) => {
+      totals.set(r.name, (totals.get(r.name) || 0) + (Number(r.amount) || 0));
+    });
+  return [...totals.entries()]
+    .map(([name, total]) => ({ name, total }))
+    .filter((e) => e.total > 0)
+    .sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+}
+
+function renderEnvelopePrintArea(entries, period, feeLabel) {
+  const area = document.getElementById('envelope-print-area');
+  area.innerHTML = entries
+    .map(
+      (e) => `
+      <div class="envelope-page">
+        <div class="env-top">
+          <img class="env-logo" src="logo.png" alt="KESEN LARUS BASKETBALL CLUB">
+          <div class="env-logo-rule"></div>
+        </div>
+        <div class="env-mid">
+          <div class="env-name-block"><div class="env-name">${escapeHtml(formatDisplayName(e.name))}<span class="sama">様</span></div></div>
+          <div class="env-period-block">
+            <span class="env-label">対象期間</span>
+            <div class="env-period">${escapeHtml(period)}</div>
+            <div class="env-fee-type">${escapeHtml(feeLabel)}</div>
+          </div>
+          <div class="env-amount-block"><span class="env-amount-num">${numFmt(e.total)}</span><span class="env-amount-unit">円</span></div>
+        </div>
+        <div class="env-footer">KESEN LARUS BASKETBALL CLUB</div>
+      </div>`
+    )
+    .join('');
+}
+
+/* 封筒は120x235mmの長形3号だが、精算書PDF(A4想定)と@pageサイズが競合するため、
+ * 印刷直前だけ動的にスタイルを差し込み、印刷後に取り除く */
+function printWithEnvelopePageSize() {
+  const style = document.createElement('style');
+  style.textContent = '@page { size: 120mm 235mm; margin: 0; }';
+  document.head.appendChild(style);
+  const cleanup = () => {
+    style.remove();
+    window.removeEventListener('afterprint', cleanup);
+  };
+  window.addEventListener('afterprint', cleanup);
+  setTimeout(cleanup, 60000);
+  window.print();
+}
+
+function handleEnvelopePrintClick() {
+  const start = document.getElementById('env-start-month').value;
+  const end = document.getElementById('env-end-month').value;
+  if (!start || !end) {
+    alert('開始月・終了月を選択してください');
+    return;
+  }
+  if (start > end) {
+    alert('開始月は終了月と同じか、それより前の月を選択してください');
+    return;
+  }
+  const entries = buildEnvelopeEntries(start, end);
+  if (entries.length === 0) {
+    alert('指定した期間に支給記録がありません');
+    return;
+  }
+  renderEnvelopePrintArea(entries, formatEnvelopePeriod(start, end), '謝礼金');
+  printWithEnvelopePageSize();
+}
+
+function initEnvelope() {
+  populateEnvelopeMonthOptions();
+  document.getElementById('btn-envelope-print').addEventListener('click', handleEnvelopePrintClick);
+}
+
+/* ============================================================
  * ダッシュボード
  * ============================================================ */
 const CATEGORY_CHART_COLORS = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)'];
@@ -867,6 +1177,7 @@ function initAuth() {
           records = recs;
           renderList();
           renderDashboard();
+          populateEnvelopeMonthOptions();
         });
       }
       if (!unsubscribeRoster) {
@@ -929,5 +1240,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initContactSettings();
   initList();
   initDashboard();
+  initBackup();
+  initEnvelope();
   initAuth();
 });

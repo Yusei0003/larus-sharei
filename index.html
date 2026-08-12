@@ -173,6 +173,35 @@
         <tbody id="list-tbody"></tbody>
       </table>
     </div>
+
+    <details class="contact-settings">
+      <summary>封筒を印刷（対象期間を指定）</summary>
+      <div class="roster-body">
+        <div class="envelope-range-row">
+          <label>開始月
+            <select id="env-start-month"></select>
+          </label>
+          <label>終了月
+            <select id="env-end-month"></select>
+          </label>
+          <button type="button" id="btn-envelope-print" class="btn-primary">封筒を印刷</button>
+        </div>
+        <p class="import-hint">指定した期間に1件でも支給記録がある対象者について、1人1枚ずつ長形3号封筒（120×235mm）の宛名面をブラウザの印刷ダイアログに表示します。用紙サイズを「長形3号」（または120×235mmのユーザー定義）にして印刷してください。</p>
+      </div>
+    </details>
+
+    <details class="contact-settings">
+      <summary>データのExcel出力・バックアップ復元</summary>
+      <div class="import-body">
+        <p class="import-hint">全期間・全対象者の記録をExcelファイルとしてダウンロードできます。改修や機種変更の前など、定期的に保存しておくことをおすすめします。</p>
+        <button type="button" id="btn-backup-export" class="btn-secondary">データをExcel出力（バックアップ）</button>
+      </div>
+      <div class="import-body">
+        <p class="import-hint">出力したファイル（.csvに変換したもの）を読み込んで記録を復元できます。日付・氏名・区分・支給額などの列を持つCSVファイルに対応しています（同じ内容の記録は重複登録されません）。</p>
+        <input type="file" id="import-file" accept=".csv,text/csv">
+        <div id="import-result" class="import-result"></div>
+      </div>
+    </details>
   </section>
 
   <!-- ============ ダッシュボードタブ ============ -->
@@ -226,6 +255,7 @@
 
 <div id="toast" class="toast"></div>
 <div id="receipt-print-area" class="receipt-print-area"></div>
+<div id="envelope-print-area" class="envelope-print-area"></div>
 <div id="chart-tooltip" class="chart-tooltip"></div>
 
 <script src="firebase-bundle.js?v=20260812163931"></script>

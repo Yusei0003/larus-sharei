@@ -587,4 +587,139 @@ main { max-width: 900px; margin: 0 auto; padding: 24px; }
   transition: opacity 0.1s;
   z-index: 100;
 }
+
+/* ============================================================
+ * バックアップ（Excel出力・取込）
+ * ============================================================ */
+.import-body { padding: 4px 0 18px; }
+.import-body + .import-body { padding-top: 0; border-top: 1px solid var(--border); margin-top: 4px; }
+.import-result { margin-top: 10px; font-size: 0.85rem; color: var(--primary-dark); white-space: pre-line; }
+
+/* ============================================================
+ * 封筒印刷（長形3号・120x235mm）
+ * ============================================================ */
+.envelope-range-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+.envelope-range-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.envelope-range-row select {
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.envelope-print-area { display: none; }
+
+@media print {
+  html, body { background: #fff; }
+  body * { visibility: hidden; }
+  .envelope-print-area, .envelope-print-area * { visibility: visible; }
+  .envelope-print-area {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background: #fff;
+  }
+}
+
+.envelope-page {
+  width: 120mm;
+  height: 235mm;
+  padding: 40px 34px 26px;
+  page-break-after: always;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: #fff;
+  color: #111;
+  font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Segoe UI", sans-serif;
+}
+.envelope-page:last-child { page-break-after: auto; }
+
+.env-top { text-align: center; }
+.env-logo {
+  width: 190px;
+  display: block;
+  margin: 0 auto 10px;
+}
+.env-logo-rule {
+  width: 70%;
+  margin: 0 auto 8px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #999, transparent);
+}
+
+.env-mid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.env-name-block { margin-bottom: 46px; }
+.env-name {
+  font-family: "Hiragino Mincho ProN", "Yu Mincho", serif;
+  font-size: 44px;
+  letter-spacing: 0.16em;
+  white-space: nowrap;
+}
+.env-name .sama { font-size: 27px; margin-left: 14px; }
+
+.env-period-block { margin-bottom: 42px; }
+.env-label {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: #555;
+  display: block;
+  margin-bottom: 10px;
+}
+.env-period {
+  font-size: 29px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.env-fee-type {
+  font-size: 15px;
+  color: #444;
+  margin-top: 6px;
+  letter-spacing: 0.08em;
+}
+
+.env-amount-block {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+}
+.env-amount-num {
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 52px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.env-amount-unit { font-size: 23px; font-weight: 600; }
+
+.env-footer {
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: #555;
+  border-top: 1px solid #ccc;
+  padding-top: 10px;
+}
 .chart-tooltip.show { opacity: 1; }
