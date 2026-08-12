@@ -16,6 +16,7 @@ import {
   updateDoc,
   deleteDoc,
   setDoc,
+  writeBatch,
 } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -66,6 +67,24 @@ window.FirebaseData = {
       if (record[k] !== undefined) data[k] = record[k];
     });
     await addDoc(recordsCol, data);
+  },
+  async addRecords(records) {
+    const chunks = [];
+    for (let i = 0; i < records.length; i += 450) {
+      chunks.push(records.slice(i, i + 450));
+    }
+    for (const chunk of chunks) {
+      const batch = writeBatch(db);
+      chunk.forEach((r) => {
+        const ref = doc(recordsCol);
+        const data = {};
+        Object.keys(r).forEach((k) => {
+          if (r[k] !== undefined) data[k] = r[k];
+        });
+        batch.set(ref, data);
+      });
+      await batch.commit();
+    }
   },
   async updateRecord(id, patch) {
     await updateDoc(doc(recordsCol, id), patch);
