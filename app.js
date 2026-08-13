@@ -553,6 +553,7 @@ function buildReceiptRows(r) {
 }
 
 function renderReceiptPrintArea(recordsToPrint) {
+  document.getElementById('envelope-print-area').innerHTML = '';
   const area = document.getElementById('receipt-print-area');
   area.innerHTML = recordsToPrint
     .map((r) => {
@@ -855,6 +856,7 @@ function buildEnvelopeEntries(startMonth, endMonth) {
 }
 
 function renderEnvelopePrintArea(entries, period, feeLabel) {
+  document.getElementById('receipt-print-area').innerHTML = '';
   const area = document.getElementById('envelope-print-area');
   area.innerHTML = entries
     .map(
