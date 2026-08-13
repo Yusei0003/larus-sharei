@@ -69,3 +69,5 @@ npx esbuild firebase-entry.js --bundle --format=iife --platform=browser --minify
 ## クラブロゴについて
 
 `logo.png`（KESEN LARUSロゴ・背景透過）は精算書の出力に使用しています。差し替える場合は同じファイル名で置き換えてください。
+
+`icon.png`（ブラウザのタブアイコン用）・`apple-touch-icon.png`（スマホのホーム画面追加用）は、ロゴ内のバスケットボールのマーク部分を切り出したものです。
