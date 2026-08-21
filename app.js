@@ -837,14 +837,10 @@ function reiwaYearOf(y) {
   return y - 2018;
 }
 
-/* 単月なら「令和8年7月分」、複数月かつ同じ年度内なら「令和8年4月〜7月分」、
- * 年をまたぐ場合は「令和7年12月〜令和8年3月分」のように両方の年を表記する */
-function formatEnvelopePeriod(startMonth, endMonth) {
-  const [sy, sm] = startMonth.split('-').map(Number);
-  const [ey, em] = endMonth.split('-').map(Number);
-  if (startMonth === endMonth) return `令和${reiwaYearOf(sy)}年${sm}月分`;
-  if (sy === ey) return `令和${reiwaYearOf(sy)}年${sm}月〜${em}月分`;
-  return `令和${reiwaYearOf(sy)}年${sm}月〜令和${reiwaYearOf(ey)}年${em}月分`;
+/* 「令和8年8月15日」の形式で日付を表示する */
+function formatEraDate(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return `令和${reiwaYearOf(y)}年${m}月${d}日`;
 }
 
 function populateEnvelopeMonthOptions() {
@@ -861,6 +857,7 @@ function populateEnvelopeMonthOptions() {
 
 function buildEnvelopeEntries(startMonth, endMonth) {
   const totals = new Map();
+  const latestDate = new Map();
   records
     .filter((r) => {
       const mk = monthKey(r.date);
@@ -868,14 +865,17 @@ function buildEnvelopeEntries(startMonth, endMonth) {
     })
     .forEach((r) => {
       totals.set(r.name, (totals.get(r.name) || 0) + (Number(r.amount) || 0));
+      if (!latestDate.has(r.name) || r.date > latestDate.get(r.name)) {
+        latestDate.set(r.name, r.date);
+      }
     });
   return [...totals.entries()]
-    .map(([name, total]) => ({ name, total }))
+    .map(([name, total]) => ({ name, total, date: latestDate.get(name) }))
     .filter((e) => e.total > 0)
     .sort((a, b) => a.name.localeCompare(b.name, 'ja'));
 }
 
-function renderEnvelopePrintArea(entries, period, feeLabel) {
+function renderEnvelopePrintArea(entries, feeLabel) {
   document.getElementById('receipt-print-area').innerHTML = '';
   const area = document.getElementById('envelope-print-area');
   area.innerHTML = entries
@@ -889,8 +889,8 @@ function renderEnvelopePrintArea(entries, period, feeLabel) {
         <div class="env-mid">
           <div class="env-name-block"><div class="env-name">${escapeHtml(formatDisplayName(e.name))}<span class="sama">様</span></div></div>
           <div class="env-period-block">
-            <span class="env-label">対象期間</span>
-            <div class="env-period">${escapeHtml(period)}</div>
+            <span class="env-label">日付</span>
+            <div class="env-period">${escapeHtml(formatEraDate(e.date))}</div>
             <div class="env-fee-type">${escapeHtml(feeLabel)}</div>
           </div>
           <div class="env-amount-block"><span class="env-amount-num">${numFmt(e.total)}</span><span class="env-amount-unit">円</span></div>
@@ -932,7 +932,7 @@ function handleEnvelopePrintClick() {
     alert('指定した期間に支給記録がありません');
     return;
   }
-  renderEnvelopePrintArea(entries, formatEnvelopePeriod(start, end), '謝礼金');
+  renderEnvelopePrintArea(entries, '謝礼金');
   printWithEnvelopePageSize();
 }
 
