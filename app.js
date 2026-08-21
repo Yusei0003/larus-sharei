@@ -515,7 +515,7 @@ function eventLabel(r) {
   if (r.role === 'referee') typeText = RULES.referee.gametype[r.gametype]?.label ?? '';
   else if (r.role === 'commissioner') typeText = 'コミッショナー';
   else if (r.role === 'other') typeText = r.otherContent || '';
-  return typeText ? `${d}　${typeText}` : d;
+  return { date: d, item: typeText };
 }
 
 function outSupplyRow(r) {
@@ -561,6 +561,7 @@ function renderReceiptPrintArea(recordsToPrint) {
       const total = rows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
       const phone = contactsCache.phones[r.name] || '';
       const address = contactsCache.addresses[r.name] || '';
+      const event = eventLabel(r);
       const rowsHtml = rows
         .map((row) => `<tr><td class="rc-item-label">${escapeHtml(row.label)}</td><td class="rc-num">${row.inKind ? '支給' : numFmt(row.amount) + ' 円'}</td></tr>`)
         .join('');
@@ -572,10 +573,10 @@ function renderReceiptPrintArea(recordsToPrint) {
         <div class="receipt-title-bar"><span>${escapeHtml(RECEIPT_TITLES[r.role] ?? '謝礼金精算書')}</span></div>
         <table class="receipt-info-table">
           <tr>
-            <th>大会名</th>
-            <td>${escapeHtml(eventLabel(r))}</td>
-            <th>大会開催地</th>
-            <td>${escapeHtml(r.venue || '')}</td>
+            <th>項目</th>
+            <td>${escapeHtml(event.date)}${event.item ? '<br>' + escapeHtml(event.item) : ''}</td>
+            <th>開催地</th>
+            <td class="receipt-venue-cell"><span class="receipt-venue-text">${escapeHtml(r.venue || '')}</span></td>
           </tr>
           <tr>
             <th>名前</th>
@@ -599,6 +600,25 @@ function renderReceiptPrintArea(recordsToPrint) {
       </div>`;
     })
     .join('');
+
+  fitReceiptVenueText();
+}
+
+/* 開催地は改行させず、セル幅に収まるまでフォントサイズを縮小する（元のサイズより拡大はしない）。
+ * 通常時はreceipt-print-areaがdisplay:noneのため、計測中だけ一時的に表示させて実寸を測る */
+function fitReceiptVenueText() {
+  const area = document.getElementById('receipt-print-area');
+  const prevDisplay = area.style.display;
+  area.style.display = 'block';
+  document.querySelectorAll('.receipt-venue-text').forEach((el) => {
+    el.style.fontSize = '';
+    let size = parseFloat(getComputedStyle(el).fontSize);
+    while (el.scrollWidth > el.clientWidth && size > 8) {
+      size -= 0.5;
+      el.style.fontSize = size + 'px';
+    }
+  });
+  area.style.display = prevDisplay;
 }
 
 function handleReceiptClick(record) {

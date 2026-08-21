@@ -440,6 +440,7 @@ main { max-width: 900px; margin: 0 auto; padding: 24px; }
   margin-bottom: 10px;
   font-size: 0.95rem;
 }
+.receipt-info-table { table-layout: fixed; }
 .receipt-info-table th, .receipt-info-table td,
 .receipt-amount-table th, .receipt-amount-table td,
 .receipt-detail-table th, .receipt-detail-table td {
@@ -453,6 +454,9 @@ main { max-width: 900px; margin: 0 auto; padding: 24px; }
   width: 110px;
   text-align: center;
 }
+.receipt-venue-cell { white-space: nowrap; }
+.receipt-venue-text { display: block; overflow: hidden; white-space: nowrap; }
+
 .receipt-name-cell { position: relative; }
 .receipt-seal {
   float: right;
