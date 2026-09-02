@@ -382,6 +382,10 @@ main { max-width: 900px; margin: 0 auto; padding: 24px; }
 @media print {
   html, body { background: #fff; }
   body * { visibility: hidden; }
+  /* 非表示にしただけの要素はレイアウト上の高さを保持したままになり、
+   * 用紙サイズより本文(body)が長くなって余分な白紙ページが出力されてしまうため、
+   * 印刷に関係ない主要コンテナはdisplay:noneでレイアウトごと取り除く */
+  .app-header, .tabs, main, #toast, #chart-tooltip, #login-overlay { display: none !important; }
   .receipt-print-area, .receipt-print-area * { visibility: visible; }
   .receipt-print-area {
     display: block;
@@ -394,12 +398,10 @@ main { max-width: 900px; margin: 0 auto; padding: 24px; }
 }
 
 .receipt-page {
-  width: 190mm;
-  margin: 0 auto 16px;
-  padding: 14mm 12mm;
+  width: 210mm;
+  margin: 0;
+  padding: 6mm 12mm;
   background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 4px 20px rgba(3, 105, 161, 0.12);
   page-break-after: always;
   font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Segoe UI", sans-serif;
   color: #000;
@@ -454,6 +456,8 @@ main { max-width: 900px; margin: 0 auto; padding: 24px; }
   width: 110px;
   text-align: center;
 }
+.receipt-info-table th { width: 19mm; }
+.receipt-info-table td:nth-child(2) { width: 37mm; }
 .receipt-venue-cell { white-space: nowrap; }
 .receipt-venue-text { display: block; overflow: hidden; white-space: nowrap; }
 

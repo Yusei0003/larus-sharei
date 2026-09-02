@@ -623,7 +623,7 @@ function fitReceiptVenueText() {
 
 function handleReceiptClick(record) {
   renderReceiptPrintArea([record]);
-  window.print();
+  printWithPageSize('210mm 148mm');
 }
 
 function initContactSettings() {
@@ -901,11 +901,11 @@ function renderEnvelopePrintArea(entries, feeLabel) {
     .join('');
 }
 
-/* 封筒は120x235mmの長形3号だが、精算書PDF(A4想定)と@pageサイズが競合するため、
+/* 封筒(長形3号)と精算書(A5)で必要な用紙サイズが異なるため、
  * 印刷直前だけ動的にスタイルを差し込み、印刷後に取り除く */
-function printWithEnvelopePageSize() {
+function printWithPageSize(sizeCss) {
   const style = document.createElement('style');
-  style.textContent = '@page { size: 120mm 235mm; margin: 0; }';
+  style.textContent = `@page { size: ${sizeCss}; margin: 0; }`;
   document.head.appendChild(style);
   const cleanup = () => {
     style.remove();
@@ -914,6 +914,10 @@ function printWithEnvelopePageSize() {
   window.addEventListener('afterprint', cleanup);
   setTimeout(cleanup, 60000);
   window.print();
+}
+
+function printWithEnvelopePageSize() {
+  printWithPageSize('120mm 235mm');
 }
 
 function handleEnvelopePrintClick() {
