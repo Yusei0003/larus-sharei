@@ -382,12 +382,16 @@ function renderList() {
       <td>${escapeHtml(r.date)}</td>
       <td>${escapeHtml(r.name)}</td>
       <td>${escapeHtml(roleLabel(r.role))}</td>
-      <td>${escapeHtml(describeEntry(r))}</td>
+      <td class="wrap">${escapeHtml(describeEntry(r))}</td>
       <td class="num"><input type="number" class="amount-edit" value="${r.amount}" data-id="${r.id}" step="1"></td>
-      <td>${escapeHtml(r.note || '')}</td>
-      <td><button class="btn-secondary receipt-btn" data-receipt="${r.id}">精算書</button></td>
-      <td><button class="btn-secondary receipt-btn" data-envelope="${r.id}">封筒</button></td>
-      <td><button class="btn-danger" data-del="${r.id}">削除</button></td>
+      <td class="wrap">${escapeHtml(r.note || '')}</td>
+      <td class="actions">
+        <div class="row-actions">
+          <button class="btn-secondary receipt-btn" data-receipt="${r.id}">精算書</button>
+          <button class="btn-secondary receipt-btn" data-envelope="${r.id}">封筒</button>
+          <button class="btn-danger" data-del="${r.id}">削除</button>
+        </div>
+      </td>
     `;
     tbody.appendChild(tr);
   });
