@@ -606,26 +606,6 @@ main { max-width: 900px; margin: 0 auto; padding: 24px; }
 /* ============================================================
  * 封筒印刷（長形3号・120x235mm）
  * ============================================================ */
-.envelope-range-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: 14px;
-  margin-bottom: 12px;
-}
-.envelope-range-row label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 0.8rem;
-  color: var(--muted);
-}
-.envelope-range-row select {
-  padding: 7px 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-
 .envelope-print-area { display: none; }
 
 @media print {
