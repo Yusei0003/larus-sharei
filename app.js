@@ -386,6 +386,7 @@ function renderList() {
       <td class="num"><input type="number" class="amount-edit" value="${r.amount}" data-id="${r.id}" step="1"></td>
       <td>${escapeHtml(r.note || '')}</td>
       <td><button class="btn-secondary receipt-btn" data-receipt="${r.id}">精算書</button></td>
+      <td><button class="btn-secondary receipt-btn" data-envelope="${r.id}">封筒</button></td>
       <td><button class="btn-danger" data-del="${r.id}">削除</button></td>
     `;
     tbody.appendChild(tr);
@@ -416,6 +417,12 @@ function renderList() {
     btn.addEventListener('click', () => {
       const record = filtered.find((r) => r.id === btn.dataset.receipt);
       if (record) handleReceiptClick(record);
+    });
+  });
+  tbody.querySelectorAll('[data-envelope]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const record = filtered.find((r) => r.id === btn.dataset.envelope);
+      if (record) handleEnvelopeClick(record);
     });
   });
 
@@ -827,7 +834,7 @@ function initBackup() {
 }
 
 /* ============================================================
- * 封筒印刷（長形3号・120x235mm、対象期間内の記録がある全員分）
+ * 封筒印刷（長形3号・120x235mm、一覧の記録1件の日付・対象者分）
  * ============================================================ */
 function formatDisplayName(name) {
   return name.length === 4 ? name.slice(0, 2) + '　' + name.slice(2) : name;
@@ -843,36 +850,12 @@ function formatEraDate(dateStr) {
   return `令和${reiwaYearOf(y)}年${m}月${d}日`;
 }
 
-function populateEnvelopeMonthOptions() {
-  const thisMonth = monthKey(new Date().toISOString());
-  const months = [...new Set([...records.map((r) => monthKey(r.date)), thisMonth].filter(Boolean))].sort().reverse();
-  const optsHtml = months.map((m) => `<option value="${m}">${m}</option>`).join('');
-  ['env-start-month', 'env-end-month'].forEach((id) => {
-    const sel = document.getElementById(id);
-    const keep = sel.value;
-    sel.innerHTML = optsHtml;
-    sel.value = months.includes(keep) ? keep : months[0] || '';
-  });
-}
-
-function buildEnvelopeEntries(startMonth, endMonth) {
-  const totals = new Map();
-  const latestDate = new Map();
-  records
-    .filter((r) => {
-      const mk = monthKey(r.date);
-      return mk >= startMonth && mk <= endMonth;
-    })
-    .forEach((r) => {
-      totals.set(r.name, (totals.get(r.name) || 0) + (Number(r.amount) || 0));
-      if (!latestDate.has(r.name) || r.date > latestDate.get(r.name)) {
-        latestDate.set(r.name, r.date);
-      }
-    });
-  return [...totals.entries()]
-    .map(([name, total]) => ({ name, total, date: latestDate.get(name) }))
-    .filter((e) => e.total > 0)
-    .sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+/* 同じ日付・同じ対象者の記録（例: 同日に審判とコミッショナーを担当）は1枚の封筒に合算する */
+function buildEnvelopeEntry(record) {
+  const total = records
+    .filter((r) => r.name === record.name && r.date === record.date)
+    .reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+  return { name: record.name, total, date: record.date };
 }
 
 function renderEnvelopePrintArea(entries, feeLabel) {
@@ -920,29 +903,9 @@ function printWithEnvelopePageSize() {
   printWithPageSize('120mm 235mm');
 }
 
-function handleEnvelopePrintClick() {
-  const start = document.getElementById('env-start-month').value;
-  const end = document.getElementById('env-end-month').value;
-  if (!start || !end) {
-    alert('開始月・終了月を選択してください');
-    return;
-  }
-  if (start > end) {
-    alert('開始月は終了月と同じか、それより前の月を選択してください');
-    return;
-  }
-  const entries = buildEnvelopeEntries(start, end);
-  if (entries.length === 0) {
-    alert('指定した期間に支給記録がありません');
-    return;
-  }
-  renderEnvelopePrintArea(entries, '謝礼金');
+function handleEnvelopeClick(record) {
+  renderEnvelopePrintArea([buildEnvelopeEntry(record)], '謝礼金');
   printWithEnvelopePageSize();
-}
-
-function initEnvelope() {
-  populateEnvelopeMonthOptions();
-  document.getElementById('btn-envelope-print').addEventListener('click', handleEnvelopePrintClick);
 }
 
 /* ============================================================
@@ -1203,7 +1166,6 @@ function initAuth() {
           records = recs;
           renderList();
           renderDashboard();
-          populateEnvelopeMonthOptions();
         });
       }
       if (!unsubscribeRoster) {
@@ -1267,6 +1229,5 @@ document.addEventListener('DOMContentLoaded', () => {
   initList();
   initDashboard();
   initBackup();
-  initEnvelope();
   initAuth();
 });
