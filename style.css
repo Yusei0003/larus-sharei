@@ -374,6 +374,18 @@ main { max-width: 900px; margin: 0 auto; padding: 24px; }
 .receipt-btn { background: #fff; border: 1px solid var(--primary); color: var(--primary-dark); }
 .receipt-btn:hover { background: var(--primary-light); }
 
+/* 一覧の操作ボタン（精算書・封筒・削除）を1列にまとめて表内に収める */
+.sheet-table td.wrap { white-space: normal; min-width: 7em; }
+.sheet-table td.actions { padding: 6px 10px; }
+.row-actions { display: flex; gap: 6px; }
+.row-actions button { padding: 5px 10px; font-size: 0.8rem; border-radius: 6px; }
+#list-tbody .amount-edit { width: 76px; }
+/* タブレット幅では横に並ぶと収まらないため縦に積む（スマホは表ごと横スクロール） */
+@media (min-width: 641px) and (max-width: 1000px) {
+  .row-actions { flex-direction: column; gap: 4px; }
+  .row-actions button { padding: 4px 8px; width: 100%; }
+}
+
 /* ============================================================
  * 謝礼金精算書（印刷・PDF出力用）
  * ============================================================ */
