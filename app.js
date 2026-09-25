@@ -563,6 +563,23 @@ function buildReceiptRows(r) {
   return [{ label: '', amount: r.amount }];
 }
 
+/* 精算書右側の金額欄（バスケットボール柄の円）。座標は様式PDF（A5横・pt単位）に合わせている */
+const RECEIPT_BALL_SVG = `
+  <svg class="rc-ball" viewBox="396 108 150 150" aria-hidden="true">
+    <line x1="470.65" y1="109.9" x2="470.65" y2="254.6" stroke="#aaa" stroke-width="1.13"/>
+    <line x1="398" y1="182.25" x2="543.3" y2="182.25" stroke="#aaa" stroke-width="1.13"/>
+    <path d="M423.8 121.6 C454.9 155.6 454.9 212.3 423.8 246.3" fill="none" stroke="#aaa" stroke-width="1.13"/>
+    <path d="M520.1 121.6 C489 155.6 489 212.3 520.1 246.3" fill="none" stroke="#aaa" stroke-width="1.13"/>
+    <circle cx="470.65" cy="182.25" r="72.4" fill="none" stroke="#222" stroke-width="1.5"/>
+    <rect x="417.8" y="157.5" width="105.7" height="49.5" rx="5.6" fill="#fff"/>
+  </svg>`;
+
+const RECEIPT_WAVE_SVG = `
+  <svg class="rc-waves" viewBox="0 394 595.3 22" preserveAspectRatio="none" aria-hidden="true">
+    <path d="M0 401.2 C49.1 396.2 98.3 396.2 147.4 401.2 C196.5 406.1 246.6 406.1 297.6 401.2 C348.7 396.2 398.7 396.2 447.9 401.2 C497 406.1 546.1 406.1 595.3 401.2" fill="none" stroke="#999" stroke-width="0.8"/>
+    <path d="M0 408.6 C49.1 403.7 98.3 403.7 147.4 408.6 C196.5 413.6 246.6 413.6 297.6 408.6 C348.7 403.7 398.7 403.7 447.9 408.6 C497 413.6 546.1 413.6 595.3 408.6" fill="none" stroke="#999" stroke-width="0.8"/>
+  </svg>`;
+
 function renderReceiptPrintArea(recordsToPrint) {
   document.getElementById('envelope-print-area').innerHTML = '';
   const area = document.getElementById('receipt-print-area');
@@ -574,40 +591,32 @@ function renderReceiptPrintArea(recordsToPrint) {
       const address = contactsCache.addresses[r.name] || '';
       const event = eventLabel(r);
       const rowsHtml = rows
-        .map((row) => `<tr><td class="rc-item-label">${escapeHtml(row.label)}</td><td class="rc-num">${row.inKind ? '支給' : numFmt(row.amount) + ' 円'}</td></tr>`)
+        .map((row) => `<div class="rc-detail-row"><span>${escapeHtml(row.label)}</span><span>${row.inKind ? '支給' : numFmt(row.amount) + '円'}</span></div>`)
         .join('');
 
       return `
       <div class="receipt-page">
-        <img class="receipt-logo-img" src="logo.png" alt="KESEN LARUS BASKETBALL CLUB">
-        <div class="receipt-logo-divider"></div>
-        <div class="receipt-title-bar"><span>${escapeHtml(RECEIPT_TITLES[r.role] ?? '謝礼金精算書')}</span></div>
-        <table class="receipt-info-table">
-          <tr>
-            <th>項目</th>
-            <td>${escapeHtml(event.date)}${event.item ? '<br>' + escapeHtml(event.item) : ''}</td>
-            <th>開催地</th>
-            <td class="receipt-venue-cell"><span class="receipt-venue-text">${escapeHtml(r.venue || '')}</span></td>
-          </tr>
-          <tr>
-            <th>名前</th>
-            <td class="receipt-name-cell">${escapeHtml(r.name)}<span class="receipt-seal">印</span></td>
-            <th>連絡先</th>
-            <td>${escapeHtml(phone)}</td>
-          </tr>
-          <tr>
-            <th>住所</th>
-            <td colspan="3">${escapeHtml(address)}</td>
-          </tr>
-        </table>
-        <table class="receipt-amount-table">
-          <tr><th>金額</th><td class="receipt-amount-value">${numFmt(total)}</td><td class="receipt-amount-unit">円</td></tr>
-        </table>
-        <table class="receipt-detail-table">
+        <img class="rc-logo" src="logo.png" alt="KESEN LARUS BASKETBALL CLUB">
+        <div class="rc-title">${escapeHtml(RECEIPT_TITLES[r.role] ?? '謝礼金精算書')}</div>
+        <div class="rc-header-rule"></div>
+        <div class="rc-info">
+          <div class="rc-info-row"><span class="rc-label">項目</span><span class="rc-value">${escapeHtml(event.date)}${event.item ? '　' + escapeHtml(event.item) : ''}</span></div>
+          <div class="rc-info-row"><span class="rc-label">開催地</span><span class="rc-value receipt-venue-text">${escapeHtml(r.venue || '')}</span></div>
+          <div class="rc-info-row"><span class="rc-label">名前</span><span class="rc-value">${escapeHtml(formatDisplayName(r.name))}</span><span class="rc-seal">印</span></div>
+          <div class="rc-info-row"><span class="rc-label">連絡先</span><span class="rc-value">${escapeHtml(phone)}</span></div>
+          <div class="rc-info-row"><span class="rc-label">住所</span><span class="rc-value receipt-venue-text">${escapeHtml(address)}</span></div>
+        </div>
+        ${r.note ? `<p class="rc-note">備考：${escapeHtml(r.note)}</p>` : ''}
+        ${RECEIPT_BALL_SVG}
+        <div class="rc-amount">
+          <span class="rc-amount-label">金額</span>
+          <span class="rc-amount-value">${numFmt(total)}<span class="rc-amount-unit">円</span></span>
+        </div>
+        <div class="rc-detail">
           ${rowsHtml}
-          <tr class="rc-total-row"><td class="rc-total-label">合計</td><td class="rc-num">${numFmt(total)} 円</td></tr>
-        </table>
-        ${r.note ? `<p class="receipt-note">備考：${escapeHtml(r.note)}</p>` : ''}
+          <div class="rc-detail-row rc-total-row"><span>合計</span><span>${numFmt(total)}円</span></div>
+        </div>
+        ${RECEIPT_WAVE_SVG}
       </div>`;
     })
     .join('');
@@ -615,7 +624,7 @@ function renderReceiptPrintArea(recordsToPrint) {
   fitReceiptVenueText();
 }
 
-/* 開催地は改行させず、セル幅に収まるまでフォントサイズを縮小する（元のサイズより拡大はしない）。
+/* 開催地・住所は改行させず、欄の幅に収まるまでフォントサイズを縮小する（元のサイズより拡大はしない）。
  * 通常時はreceipt-print-areaがdisplay:noneのため、計測中だけ一時的に表示させて実寸を測る */
 function fitReceiptVenueText() {
   const area = document.getElementById('receipt-print-area');
@@ -632,9 +641,25 @@ function fitReceiptVenueText() {
   area.style.display = prevDisplay;
 }
 
+/* 精算書のWebフォント（Noto Sans JP）が読み込まれる前に印刷すると代替フォントで出力されるため、
+ * 読み込みを待ってから印刷する（オフライン等で読み込めない場合も最大2秒で印刷に進む） */
+function waitForReceiptFonts() {
+  if (!document.fonts || !document.fonts.load) return Promise.resolve();
+  // Google Fontsの日本語フォントは文字ごとに分割配信されるため、精算書に実際に使う文字で読み込む
+  const text = document.getElementById('receipt-print-area').textContent.replace(/\s+/g, '') + '0123456789,円';
+  const loads = Promise.all(['400', '500', '700'].map((w) => document.fonts.load(`${w} 12pt "Noto Sans JP"`, text)))
+    .then(() => document.fonts.ready)
+    .catch(() => {});
+  const timeout = new Promise((resolve) => setTimeout(resolve, 2000));
+  return Promise.race([loads, timeout]);
+}
+
 function handleReceiptClick(record) {
   renderReceiptPrintArea([record]);
-  printWithPageSize('210mm 148mm');
+  waitForReceiptFonts().then(() => {
+    fitReceiptVenueText();
+    printWithPageSize('210mm 148mm');
+  });
 }
 
 function initContactSettings() {
